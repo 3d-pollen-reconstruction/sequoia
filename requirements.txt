@@ -1,0 +1,17 @@
+selenium==4.28.1
+pandas==2.2.3
+requests==2.32.3
+trimesh==4.6.1
+matplotlib==3.10.0
+pyglet<2
+scipy
+shapely
+networkx
+mapbox-earcut
+manifold3d
+triangle
+mapbox_earcut
+pyrender
+vtk
+
+
