@@ -13,5 +13,6 @@ triangle
 mapbox_earcut
 pyrender
 vtk
+uv
 
 
