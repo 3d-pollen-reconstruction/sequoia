@@ -14,27 +14,24 @@ from PIL import Image
 
 
 class PollenDataset(Dataset):
-    def __init__(self, model_dir, transform=None, return_3d=False):
+    def __init__(self, data_dir, transform=None, return_3d=False):
         """
         Args:
-            model_dir (str): Pfad zu den STL-Modellen.
+            data_dir (str): Pfad zu den STL-Modellen.
             transform (callable, optional): Transformation, die auf die gerenderten Bilder angewendet wird.
             return_3d (bool): Falls True, wird zusätzlich der Pfad zum 3D-Modell zurückgegeben.
         """
-        self.model_dir = model_dir
+        self.data_dir = data_dir
         self.transform = transform
         self.return_3d = return_3d
 
-        # Liste problematischer Modelle, die ausgeschlossen werden sollen
         self.exclude_list = [
-            # (Beispielhaft – bitte ggf. erweitern)
             "17778_Salix%20alba%20-%20Willow_NIH3D.stl",
             "17796_Fuchsia%20magellanica%20-%20Hardy%20fuchsia_NIH3D.stl",
-            # ...
         ]
-        # Alle STL-Dateien im Verzeichnis (ohne die in exclude_list)
+        
         self.files = [
-            f for f in os.listdir(model_dir)
+            f for f in os.listdir(data_dir)
             if f.endswith(".stl") and f not in self.exclude_list
         ]
         if len(self.files) == 0:
@@ -45,7 +42,7 @@ class PollenDataset(Dataset):
 
     def __getitem__(self, idx):
         file_name = self.files[idx]
-        file_path = os.path.join(self.model_dir, file_name)
+        file_path = os.path.join(self.data_dir, file_name)
         # Zufällige Rotation um alle drei Achsen
         rotation = (
             random.uniform(0, 360),

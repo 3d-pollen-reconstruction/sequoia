@@ -1,7 +1,6 @@
 *.cmd
 *.exe
 **/models*
-*/venv*
 */__pycache__*
 */.vscode*
 */.idea*
@@ -13,3 +12,10 @@
 */.gitlab-ci.yml*
 */.gitlab*
 */.github
+
+.venv
+__pycache__/
+.env
+*.log
+/data/raw/*.stl
+/data/processed/*.stl
