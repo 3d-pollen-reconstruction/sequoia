@@ -10,6 +10,7 @@ dependencies = [
     "numpy>=2.2.3",
     "opencv-python>=4.11.0.86",
     "pandas>=2.2.3",
+    "python-dotenv>=1.0.1",
     "requests>=2.32.3",
     "selenium>=4.29.0",
     "torch>=2.6.0",
