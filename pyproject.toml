@@ -24,4 +24,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "vtk>=9.4.1",
     "webdriver-manager>=4.0.2",
+    "seaborn>=0.13.2",
+    "pyglet<2",
+    "scikit-learn>=1.6.1",
 ]
