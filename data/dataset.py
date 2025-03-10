@@ -17,9 +17,9 @@ class PollenDataset(Dataset):
     def __init__(self, data_dir, transform=None, return_3d=False):
         """
         Args:
-            data_dir (str): Pfad zu den STL-Modellen.
-            transform (callable, optional): Transformation, die auf die gerenderten Bilder angewendet wird.
-            return_3d (bool): Falls True, wird zusätzlich der Pfad zum 3D-Modell zurückgegeben.
+            data_dir (str): Path of STL models.
+            transform (callable, optional): Transformation(s) that get applied to the models.
+            return_3d (bool): If true, the path of the 3d models will be returned.
         """
         self.data_dir = data_dir
         self.transform = transform
@@ -35,7 +35,7 @@ class PollenDataset(Dataset):
             if f.endswith(".stl") and f not in self.exclude_list
         ]
         if len(self.files) == 0:
-            raise RuntimeError("Keine STL-Dateien nach Filterung gefunden.")
+            raise RuntimeError("No STL-files after filtering found.")
 
     def __len__(self):
         return len(self.files)
@@ -43,14 +43,14 @@ class PollenDataset(Dataset):
     def __getitem__(self, idx):
         file_name = self.files[idx]
         file_path = os.path.join(self.data_dir, file_name)
-        # Zufällige Rotation um alle drei Achsen
+
         rotation = (
             random.uniform(0, 360),
             random.uniform(0, 360),
             random.uniform(0, 360),
         )
         left_view, right_view = self.render_model_views_from_file(file_path, rotation)
-        # Umwandeln in PIL-Images (damit Transformationen via torchvision möglich sind)
+        
         left_img = Image.fromarray(left_view.astype(np.uint8))
         right_img = Image.fromarray(right_view.astype(np.uint8))
         if self.transform is not None:
@@ -69,12 +69,12 @@ class PollenDataset(Dataset):
         return sample
 
     def render_model_views_from_file(self, selected_path, rotation):
-        # 1. STL-Datei laden
+        # 1. Loading .stl file
         reader = vtk.vtkSTLReader()
         reader.SetFileName(selected_path)
         reader.Update()
 
-        # 2. Smoothing-Filter anwenden, um das Mesh zu vereinfachen
+        # 2. Applying smoothing filter to simplify mesh
         smoothFilter = vtk.vtkSmoothPolyDataFilter()
         smoothFilter.SetInputConnection(reader.GetOutputPort())
         smoothFilter.SetNumberOfIterations(30)
@@ -86,7 +86,7 @@ class PollenDataset(Dataset):
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputConnection(smoothFilter.GetOutputPort())
 
-        # 3. Erstelle zwei Actors für die beiden Ansichten
+        # 3. Creating actors to capture two orthogonal views
         actor1 = vtk.vtkActor()
         actor1.SetMapper(mapper)
         actor2 = vtk.vtkActor()
@@ -98,7 +98,7 @@ class PollenDataset(Dataset):
             actor.GetProperty().SetSpecular(0.5)
             actor.GetProperty().SetSpecularPower(50)
 
-        # 4. Zwei Renderer für zwei Viewports (links/rechts)
+        # 4. Creating two renderers for both views
         renderer1 = vtk.vtkRenderer()
         renderer2 = vtk.vtkRenderer()
         renderer1.SetViewport(0.0, 0.0, 0.5, 1.0)
@@ -108,7 +108,7 @@ class PollenDataset(Dataset):
         renderer1.AddActor(actor1)
         renderer2.AddActor(actor2)
 
-        # 5. Licht hinzufügen
+        # 5. Adding light sources
         light = vtk.vtkLight()
         light.SetLightTypeToSceneLight()
         light.SetPosition(1, 1, 1)
@@ -118,7 +118,7 @@ class PollenDataset(Dataset):
         renderer1.AddLight(light)
         renderer2.AddLight(light)
 
-        # 6. Optional: Shadow Mapping einrichten
+        # 6. Set up shadow mapping
         shadow_pass = vtk.vtkShadowMapPass()
         opaque_pass = vtk.vtkOpaquePass()
         render_pass_collection = vtk.vtkRenderPassCollection()
@@ -131,36 +131,36 @@ class PollenDataset(Dataset):
         renderer1.SetPass(camera_pass)
         renderer2.SetPass(camera_pass)
 
-        # 7. Objekt zentrieren und Kameraeinstellungen
+        # 7. Center pollen grain object and set camera options
         polydata = smoothFilter.GetOutput()
         bounds = polydata.GetBounds()
         center = polydata.GetCenter()
         max_dim = max(bounds[1]-bounds[0], bounds[3]-bounds[2], bounds[5]-bounds[4])
         distance = max_dim * 2.5 if max_dim > 0 else 100
 
-        # Kamera für view1 (von Z-Achse)
+        # Z-Axis cam
         cam1 = vtk.vtkCamera()
         cam1.SetFocalPoint(center)
         cam1.SetPosition(center[0], center[1], center[2] + distance)
         cam1.SetViewUp(0, 1, 0)
         renderer1.SetActiveCamera(cam1)
 
-        # Kamera für view2 (von X-Achse)
+        # X-Axis cam
         cam2 = vtk.vtkCamera()
         cam2.SetFocalPoint(center)
         cam2.SetPosition(center[0] + distance, center[1], center[2])
         cam2.SetViewUp(0, 1, 0)
         renderer2.SetActiveCamera(cam2)
 
-        # Rotation auf beide Actors anwenden
+        # Apply rotations on the actors
         actor1.SetOrigin(center)
         actor2.SetOrigin(center)
         actor1.SetOrientation(rotation)
         actor2.SetOrientation(rotation)
 
-        # 8. Offscreen-Renderfenster einrichten (reduzierte Auflösung: 1024x512)
+        # 8. Setup offscreen render window (reduced resolution of 1024x512)
         renderWindow = vtk.vtkRenderWindow()
-        renderWindow.SetSize(1024, 512)  # Jeweils 512 Pixel pro Ansicht
+        renderWindow.SetSize(1024, 512)  # 512x512 pixels for each view, combined for both views 1024x512
         renderWindow.SetOffScreenRendering(1)
         renderWindow.AddRenderer(renderer1)
         renderWindow.AddRenderer(renderer2)
@@ -168,7 +168,7 @@ class PollenDataset(Dataset):
         renderer2.ResetCameraClippingRange()
         renderWindow.Render()
 
-        # 9. Screenshot aufnehmen
+        # 9. Capture the render window
         w2if = vtk.vtkWindowToImageFilter()
         w2if.SetInput(renderWindow)
         w2if.Update()
@@ -179,15 +179,15 @@ class PollenDataset(Dataset):
         vtk_array = vtk_to_numpy(vtk_image.GetPointData().GetScalars())
         height, width = dims[1], dims[0]
         arr = vtk_array.reshape(height, width, num_comp)
-        arr = np.flipud(arr)  # Vertikal umdrehen
+        arr = np.flipud(arr)  # flip vertically
 
-        # In Graustufen umwandeln
+        # Convert to grayscale
         if num_comp >= 3:
             arr = np.dot(arr[..., :3], [0.299, 0.587, 0.114])
         else:
             arr = arr[..., 0]
 
-        # Linke und rechte Ansicht aus dem kombinierten Bild extrahieren
+        # Extract left and right view from the combined image
         half_width = width // 2
         left_view = arr[:, :half_width]
         right_view = arr[:, half_width:]
