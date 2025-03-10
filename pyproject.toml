@@ -27,4 +27,12 @@ dependencies = [
     "seaborn>=0.13.2",
     "pyglet<2",
     "scikit-learn>=1.6.1",
+    "ipywidgets>=8.1.5",
+    "nbformat>=5.10.4",
+    "ipyvtklink>=0.2.2",
+    "trame>=3.8.1",
+    "trame-vtk>=2.8.15",
+    "trame-vuetify>=2.8.1",
+    "pyvista>=0.44.1",
+    "trame-jupyter-extension>=2.1.4",
 ]
