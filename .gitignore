@@ -19,5 +19,6 @@ __pycache__/
 *.log
 /data/raw/*.stl
 /data/processed/*.stl
+/data/processed/**/*.png
 
 **.stl
