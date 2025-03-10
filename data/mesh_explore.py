@@ -59,52 +59,51 @@ class MeshExplorer:
 
     def visualize_advanced_properties(self, df):
         """Creates visualizations for shape complexity and geometric properties."""
+        # Scatter plot: Bounding Box Volume vs. Convex Hull Volume
         plt.figure(figsize=(12, 6))
         sns.scatterplot(data=df, x="bounding_box_volume", y="convex_hull_volume")
         plt.title("Bounding Box Volume vs. Convex Hull Volume")
         plt.xlabel("Bounding Box Volume")
         plt.ylabel("Convex Hull Volume")
         plt.grid(True)
-        plt.savefig("mesh_analysis/bounding_box_vs_hull_volume.png")
-        plt.close()
+        plt.show()
 
+        # Histogram: Sphericity Distribution
         plt.figure(figsize=(10, 6))
         sns.histplot(df, x="sphericity", kde=True)
         plt.title("Sphericity Distribution")
-        plt.savefig("mesh_analysis/sphericity_distribution.png")
-        plt.close()
+        plt.show()
         
-        return
+        return plt
 
     def perform_dimensionality_reduction(self, df):
         """Performs PCA and t-SNE on shape-related features."""
         feature_cols = ["bounding_box_volume", "aspect_ratio", "convex_hull_volume", "sphericity"]
         df_features = df.dropna(subset=feature_cols)[feature_cols]
         
+        # PCA analysis
         pca = PCA(n_components=2)
         pca_result = pca.fit_transform(df_features)
         df["pca_1"], df["pca_2"] = pca_result[:, 0], pca_result[:, 1]
         
-        # Verwende explizit n_jobs=1, um die Parallelisierungswarnung zu vermeiden
+        # t-SNE analysis (using n_jobs=1 to suppress parallelization warnings)
         tsne = TSNE(n_components=2, perplexity=10, random_state=42, n_jobs=1)
-        
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             tsne_result = tsne.fit_transform(df_features)
-        
         df["tsne_1"], df["tsne_2"] = tsne_result[:, 0], tsne_result[:, 1]
         
+        # PCA Plot
         plt.figure(figsize=(10, 6))
         sns.scatterplot(x=df["pca_1"], y=df["pca_2"])
         plt.title("PCA of Mesh Properties")
-        plt.savefig("mesh_analysis/pca_analysis.png")
-        plt.close()
+        plt.show()
         
+        # t-SNE Plot
         plt.figure(figsize=(10, 6))
         sns.scatterplot(x=df["tsne_1"], y=df["tsne_2"])
         plt.title("t-SNE of Mesh Properties")
-        plt.savefig("mesh_analysis/tsne_analysis.png")
-        plt.close()
+        plt.show()
         
         return
     
