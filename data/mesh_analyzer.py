@@ -227,17 +227,13 @@ class MeshAnalyzer:
         return implications_df
     
     def run_exploration(self):
-        """Runs the exploratory analysis."""
+        """Runs the exploratory analysis without visualization."""
         print("Running exploratory analysis of 3D models...")
         df = self.analyze_watertight_status()
         print(f"Analyzed {len(df)} models.")
+        
         watertight_count = df["is_watertight"].sum()
         print(f"Watertight models: {watertight_count} of {len(df)} ({100 * watertight_count / len(df):.1f}%)")
-        
-        self.visualize_watertightness(df)
-        self.analyze_euler_characteristics(df)
-        self.compute_implications_of_non_watertight(df)
-        self.visualize_sample_models(df)
         
         print("\nExploratory analysis completed. Check the 'mesh_analysis' folder for saved CSV files.")
         return df
@@ -246,3 +242,9 @@ class MeshAnalyzer:
 if __name__ == "__main__":
     analyzer = MeshAnalyzer()
     results = analyzer.run_exploration()
+
+    # Call visualization functions separately
+    analyzer.visualize_watertightness(results)
+    analyzer.analyze_euler_characteristics(results)
+    analyzer.compute_implications_of_non_watertight(results)
+    analyzer.visualize_sample_models(results)

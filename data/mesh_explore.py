@@ -108,11 +108,9 @@ class MeshExplorer:
         return
     
     def run_advanced_analysis(self):
-        """Executes the extended analysis workflow."""
+        """Executes the extended analysis workflow without visualization."""
         print("Running advanced 3D model analysis...")
         df = self.analyze_advanced_properties()
-        self.visualize_advanced_properties(df)
-        self.perform_dimensionality_reduction(df)
         print("Advanced analysis completed.")
         return df
 
