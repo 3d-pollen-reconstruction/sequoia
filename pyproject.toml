@@ -35,4 +35,5 @@ dependencies = [
     "trame-vuetify>=2.8.1",
     "pyvista>=0.44.1",
     "trame-jupyter-extension>=2.1.4",
+    "scipy>=1.15.2",
 ]

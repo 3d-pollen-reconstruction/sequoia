@@ -8,6 +8,11 @@ from tqdm import tqdm
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 import pyglet
+import networkx as nx
+from scipy.spatial import ConvexHull
+import scipy.fftpack
+
+import scipy
 
 class MeshAnalyzer:
     def __init__(self, data_dir="../data/raw/"):
@@ -226,6 +231,99 @@ class MeshAnalyzer:
         
         return implications_df
     
+    def fourier_analysis(self):
+        """Computes the 3D Fourier Transform for all meshes."""
+        stl_files = [f for f in os.listdir(self.data_dir) if f.endswith(".stl")]
+        spectra = []
+        
+        for file in tqdm(stl_files, desc="Computing Fourier Transform"):
+            file_path = os.path.join(self.data_dir, file)
+            try:
+                mesh = trimesh.load_mesh(file_path)
+                voxels = mesh.voxelized(pitch=0.1).matrix.astype(np.float32)
+                spectrum = np.abs(scipy.fftpack.fftn(voxels))
+                spectrum_shifted = np.fft.fftshift(spectrum)
+                spectra.append({"file_name": file, "spectrum": spectrum_shifted})
+            except Exception as e:
+                print(f"Error processing {file}: {str(e)}")
+        return pd.DataFrame(spectra)
+    
+    def convex_hull_analysis(self):
+        """Computes convex hull properties for all meshes."""
+        stl_files = [f for f in os.listdir(self.data_dir) if f.endswith(".stl")]
+        hull_data = []
+        
+        for file in tqdm(stl_files, desc="Computing Convex Hulls"):
+            file_path = os.path.join(self.data_dir, file)
+            try:
+                mesh = trimesh.load_mesh(file_path)
+                hull = ConvexHull(mesh.vertices)
+                hull_data.append({"file_name": file, "volume": hull.volume, "area": hull.area})
+            except Exception as e:
+                print(f"Error processing {file}: {str(e)}")
+        return pd.DataFrame(hull_data)
+    
+    def graph_laplacian_spectrum(self):
+        """Computes spectral properties of the mesh graph for all meshes."""
+        stl_files = [f for f in os.listdir(self.data_dir) if f.endswith(".stl")]
+        spectra = []
+        
+        for file in tqdm(stl_files, desc="Computing Graph Laplacian Spectrum"):
+            file_path = os.path.join(self.data_dir, file)
+            try:
+                mesh = trimesh.load_mesh(file_path)
+                G = nx.Graph()
+                for edge in mesh.edges:
+                    G.add_edge(edge[0], edge[1])
+                laplacian = nx.laplacian_matrix(G).toarray()
+                eigvals = np.linalg.eigvalsh(laplacian)
+                spectra.append({"file_name": file, "spectrum": eigvals})
+            except Exception as e:
+                print(f"Error processing {file}: {str(e)}")
+        return pd.DataFrame(spectra)
+    
+    def shape_distribution(self):
+        """Computes the D2 shape distribution for all meshes."""
+        stl_files = [f for f in os.listdir(self.data_dir) if f.endswith(".stl")]
+        shape_data = []
+        
+        for file in tqdm(stl_files, desc="Computing Shape Distributions"):
+            file_path = os.path.join(self.data_dir, file)
+            try:
+                mesh = trimesh.load_mesh(file_path)
+                samples = mesh.sample(10000)
+                pairwise_dists = scipy.spatial.distance.pdist(samples)
+                shape_data.append({"file_name": file, "shape_distribution": pairwise_dists})
+            except Exception as e:
+                print(f"Error processing {file}: {str(e)}")
+        return pd.DataFrame(shape_data)
+    
+    def visualize_shape_distribution_sample(self, df):
+        """Visualizes the shape distribution for a sample model."""
+        sample = df.sample()
+        distances = sample["shape_distribution"].values[0]
+        
+        plt.figure(figsize=(10, 6))
+        sns.histplot(distances, kde=True, color="skyblue")
+        plt.title("Pairwise Distance Distribution of Sample Model")
+        plt.xlabel("Pairwise Distance")
+        plt.ylabel("Density")
+        plt.grid(True, linestyle="--", alpha=0.7)
+        plt.show()
+        
+    def visualize_shape_distribution(self, df):
+        """Visualizes the shape distribution for all models."""
+        plt.figure(figsize=(12, 6))
+        for _, row in df.iterrows():
+            distances = row["shape_distribution"]
+            sns.histplot(distances, kde=True, alpha=0.5)
+        plt.title("Pairwise Distance Distribution of All Models")
+        plt.xlabel("Pairwise Distance")
+        plt.ylabel("Density")
+        plt.grid(True, linestyle="--", alpha=0.7)
+        plt.show()
+
+    
     def run_exploration(self):
         """Runs the exploratory analysis without visualization."""
         print("Running exploratory analysis of 3D models...")
@@ -248,3 +346,7 @@ if __name__ == "__main__":
     analyzer.analyze_euler_characteristics(results)
     analyzer.compute_implications_of_non_watertight(results)
     analyzer.visualize_sample_models(results)
+    analyzer.fourier_analysis()
+    analyzer.convex_hull_analysis()
+    analyzer.graph_laplacian_spectrum()
+    analyzer.shape_distribution()

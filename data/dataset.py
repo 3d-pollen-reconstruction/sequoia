@@ -14,6 +14,9 @@ from torchvision import transforms
 from PIL import Image
 
 
+# todo add dilated_matrix = scipy.ndimage.binary_dilation(voxels.matrix, iterations=iterations) for data augmentation
+
+
 class PollenDataset(Dataset):
     def __init__(self, data_dir, processed_dir="data/processed", transform=None, fold=None):
         """
