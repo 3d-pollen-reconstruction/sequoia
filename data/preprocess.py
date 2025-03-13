@@ -212,7 +212,7 @@ if __name__ == "__main__":
                         format="%(asctime)s [%(levelname)s] %(message)s")
     parser = argparse.ArgumentParser(description="3D Pollen Mesh Preprocessing Pipeline")
     parser.add_argument("--raw_dir", type=str,
-                        default=os.path.join(os.getenv("DATA_DIR_PATH"), "raw"),
+                        default=os.path.join(os.getenv("DATA_DIR_PATH"), ""),
                         help="Directory containing raw STL models.")
     parser.add_argument("--processed_images_dir", type=str,
                         default=os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "images"),

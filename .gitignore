@@ -3,6 +3,7 @@
 **/models*
 */__pycache__*
 */.vscode*
+.vscode/
 */.idea*
 */.git*
 */.gitignore*
@@ -22,3 +23,5 @@ __pycache__/
 /data/processed/**/*.png
 
 **.stl
+
+.DS_Store
