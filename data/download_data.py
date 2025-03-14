@@ -18,9 +18,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
-USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-              "AppleWebKit/537.36 (KHTML, like Gecko) "
-              "Chrome/131.0.0.0 Safari/537.36")
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
 
 CSV_FILE = "3d_pollen_library.csv"
 RAW_DIR = os.path.join(os.getcwd(), "raw")
@@ -28,6 +30,7 @@ os.makedirs(RAW_DIR, exist_ok=True)
 
 downloaded_meshes = {}
 downloaded_meshes_lock = threading.Lock()
+
 
 def sanitize_title(title):
     """Sanitize a title string to be filesystem‐friendly."""
@@ -37,6 +40,7 @@ def sanitize_title(title):
     if not title:
         title = "unknown"
     return title
+
 
 def extract_fields(hit):
     """
@@ -49,8 +53,11 @@ def extract_fields(hit):
     fields_dict = {"id": fields["id"][0]}
     for key, value in fields.items():
         if key != "id":
-            fields_dict[key] = value[0] if isinstance(value, list) and len(value) == 1 else value
+            fields_dict[key] = (
+                value[0] if isinstance(value, list) and len(value) == 1 else value
+            )
     return fields_dict
+
 
 def fetch_records():
     """
@@ -67,7 +74,9 @@ def fetch_records():
     )
     response = requests.get(init_url, headers={"User-Agent": USER_AGENT})
     if response.status_code != 200:
-        print(f"Error: Failed to fetch data from API (status code: {response.status_code}).")
+        print(
+            f"Error: Failed to fetch data from API (status code: {response.status_code})."
+        )
         return all_records
 
     obj = response.json()
@@ -81,7 +90,9 @@ def fetch_records():
         )
         response = requests.get(url, headers={"User-Agent": USER_AGENT})
         if response.status_code != 200:
-            print(f"Error: Failed to fetch data from {url} (status code: {response.status_code}).")
+            print(
+                f"Error: Failed to fetch data from {url} (status code: {response.status_code})."
+            )
             break
 
         obj = response.json()
@@ -97,6 +108,7 @@ def fetch_records():
     pbar.close()
     return all_records
 
+
 def wait_for_download(download_path, timeout):
     """
     Wait for an STL file to appear in download_path.
@@ -111,11 +123,12 @@ def wait_for_download(download_path, timeout):
         time.sleep(0.5)
     return None
 
+
 def download_model(row, driver, download_path, timeout=30):
     """
     Downloads the mesh corresponding to the CSV row.
     Uses CSV fields for naming: destination filename will be
-       {row.id}_{sanitized_title}.stl
+    {row.id}_{sanitized_title}.stl
     If a duplicate is detected (same sanitized title), copies the
     already downloaded file to the new destination.
     Returns None on success, or the row (for retry) on failure.
@@ -177,7 +190,9 @@ def download_model(row, driver, download_path, timeout=30):
                 # Duplicate: copy the already downloaded file.
                 src = downloaded_meshes[canonical]
                 shutil.copy(src, destination)
-                print(f"[{row_id}] Duplicate mesh detected; copied from {os.path.basename(src)} to {dest_filename}")
+                print(
+                    f"[{row_id}] Duplicate mesh detected; copied from {os.path.basename(src)} to {dest_filename}"
+                )
                 # Remove the temporary download.
                 os.remove(downloaded_file)
             else:
@@ -191,6 +206,7 @@ def download_model(row, driver, download_path, timeout=30):
     except Exception as e:
         print(f"[{row_dict['id']}] Error downloading mesh: {e}")
         return row
+
 
 def create_driver(row_dict, headless=True):
     """
@@ -212,38 +228,41 @@ def create_driver(row_dict, headless=True):
             "plugins.always_open_pdf_externally": True,
         },
     )
-    
+
     if headless:
         chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument('--ignore-certificate-errors')
-    chrome_options.add_argument('--ignore-certificate-errors-spki-list')
-    chrome_options.add_argument('--ignore-ssl-errors')
+    chrome_options.add_argument("--ignore-certificate-errors")
+    chrome_options.add_argument("--ignore-certificate-errors-spki-list")
+    chrome_options.add_argument("--ignore-ssl-errors")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--enable-features=NetworkService,NetworkServiceInProcess")
+    chrome_options.add_argument(
+        "--enable-features=NetworkService,NetworkServiceInProcess"
+    )
     chrome_options.add_argument(f"user-agent={USER_AGENT}")
 
     driver = webdriver.Chrome(options=chrome_options)
     driver.maximize_window()
-    
+
     if headless:
         try:
-            driver.execute_cdp_cmd('Page.setDownloadBehavior', {
-                'behavior': 'allow',
-                'downloadPath': download_path
-            })
+            driver.execute_cdp_cmd(
+                "Page.setDownloadBehavior",
+                {"behavior": "allow", "downloadPath": download_path},
+            )
             print(f"Headless mode: download behavior set to {download_path}")
         except Exception as e:
             print(f"ERROR setting headless download behavior: {e}")
-    
+
     return driver, download_path
+
 
 def process_partition(driver, download_path, rows, timeout, pbar):
     """
@@ -259,10 +278,16 @@ def process_partition(driver, download_path, rows, timeout, pbar):
         pbar.update(1)
     return failed
 
+
 def main():
     parser = argparse.ArgumentParser(description="Download 3D pollen STL models.")
-    parser.add_argument("--no-headless", action="store_false", dest="headless",
-                        help="Run with browser window visible (not headless).", default=True)
+    parser.add_argument(
+        "--no-headless",
+        action="store_false",
+        dest="headless",
+        help="Run with browser window visible (not headless).",
+        default=True,
+    )
     args = parser.parse_args()
     headless = args.headless
 
@@ -303,19 +328,25 @@ def main():
             futures = []
             for i in range(max_workers):
                 if partitions[i]:
-                    futures.append(executor.submit(process_partition,
-                                                   drivers[i][0],
-                                                   drivers[i][1],
-                                                   partitions[i],
-                                                   timeout,
-                                                   pbar))
+                    futures.append(
+                        executor.submit(
+                            process_partition,
+                            drivers[i][0],
+                            drivers[i][1],
+                            partitions[i],
+                            timeout,
+                            pbar,
+                        )
+                    )
             for future in concurrent.futures.as_completed(futures):
                 failed_rows = future.result()
                 all_failed.extend(failed_rows)
         if all_failed:
             retry_count += 1
             timeout *= 2
-            print(f"\nRetrying {len(all_failed)} failed downloads (attempt {retry_count + 1})...")
+            print(
+                f"\nRetrying {len(all_failed)} failed downloads (attempt {retry_count + 1})..."
+            )
             partitions = [all_failed[i::max_workers] for i in range(max_workers)]
         else:
             break
@@ -328,14 +359,15 @@ def main():
             shutil.rmtree(download_path)
         except Exception:
             pass
-    
+
     # total files is len of RAW_DIR of files with .stl ending
-    total_files = len([f for f in os.listdir(RAW_DIR) if f.endswith('.stl')])
+    total_files = len([f for f in os.listdir(RAW_DIR) if f.endswith(".stl")])
     unique_meshes = len(downloaded_meshes)
     print("\nDownload Summary:")
     print(f"  Total CSV records: {total_records}")
     print(f"  Files in RAW directory: {total_files}")
     print(f"  Unique meshes (by title): {unique_meshes}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
