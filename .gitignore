@@ -21,7 +21,12 @@ __pycache__/
 /data/raw/*.stl
 /data/processed/*.stl
 /data/processed/**/*.png
-
+/data/*.obj
+/data/*.mtl
+/data/*.png
+/data/*.jpg
+/data/*.jpeg
+/data/*.vsi
 **.stl
 
 .DS_Store
