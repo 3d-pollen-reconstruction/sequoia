@@ -474,6 +474,25 @@ wheels = [
 ]
 
 [[package]]
+name = "fast-simplification"
+version = "0.1.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3c/54/f1f375ab48e04f713a880eb8d5fd0ff31184c8e09324ec492365dc873573/fast_simplification-0.1.9.tar.gz", hash = "sha256:c1303e082d6c8a8c0c4a4b96f8d6625f9da92d9001ea128af54eacd6c96871c8", size = 26175 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/61/51/73b4314b498c354e008eaef83dce2080c503754640229eee344a470caada/fast_simplification-0.1.9-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:3ab05418db5b1912ad1da48d21c369ef73d08e62c061beb4a2acb6e21b6ba8e6", size = 263332 },
+    { url = "https://files.pythonhosted.org/packages/1c/57/4f5fc7c68c4be251c0bf4b35073fd5609e36fd2ab9b6f74d20662e65776e/fast_simplification-0.1.9-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:1b8cf827407d92e5f9bb57123b9d19b52b916dd40a52da316d09f65b68d393a1", size = 241499 },
+    { url = "https://files.pythonhosted.org/packages/fb/b8/50802109b759489653ec1daf9a7618d437c43835533078a1232541161ba3/fast_simplification-0.1.9-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:153a9fc728191102609d9e9589f7f8eeb3c2f331e711a8406bdd1043ceee4ea3", size = 1776729 },
+    { url = "https://files.pythonhosted.org/packages/e1/08/988bd09de4b990628921abeb1549743eb43df7fa8f6441072a11b1a1c7c2/fast_simplification-0.1.9-cp311-cp311-win_amd64.whl", hash = "sha256:bfaf68475955ffb4c09b177a5ab4b3479291e0f89c1da4b020ce2d284d352d3a", size = 212355 },
+    { url = "https://files.pythonhosted.org/packages/82/f7/f969a65f423c223a421e397b7e41f904c551d90e023c06917d318509e555/fast_simplification-0.1.9-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:2125c2fbd0438e42f6ab1c0cda1b9203783012115e1cd54d2efbcb0c2f5eead1", size = 263424 },
+    { url = "https://files.pythonhosted.org/packages/7e/39/d9941b50413eb521b104bda1aa147466f557b54ccbd74e4a6e4ea9ad680a/fast_simplification-0.1.9-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:8d8c848bdf35d0e6f87364fbfc39273ab3bdfd23d5f73f85fabab4c69419f519", size = 241132 },
+    { url = "https://files.pythonhosted.org/packages/94/60/f5bce2df657c7591651593e29d33e4b02c67fcfdb03e0be0a0ce9d461692/fast_simplification-0.1.9-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fa2943d38a3f03e00daff1bc418353bd02493eda2c387831df2991c65b7e6ab5", size = 1752657 },
+    { url = "https://files.pythonhosted.org/packages/d2/ec/002433ccae77daf86dc6525516e7b38fa2f321d5232434797b9090340ee0/fast_simplification-0.1.9-cp312-cp312-win_amd64.whl", hash = "sha256:8820f5a5fd10f90c75aae2157fe5ff3ae534bcb0ddfd94d8cd6de7b23c59bf4e", size = 211829 },
+]
+
+[[package]]
 name = "fastjsonschema"
 version = "2.21.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2527,6 +2546,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "dotenv" },
+    { name = "fast-simplification" },
     { name = "ipykernel" },
     { name = "ipytest" },
     { name = "ipyvtklink" },
@@ -2566,6 +2586,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "dotenv", specifier = ">=0.9.9" },
+    { name = "fast-simplification", specifier = ">=0.1.9" },
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "ipytest", specifier = ">=0.14.2" },
     { name = "ipyvtklink", specifier = ">=0.2.2" },

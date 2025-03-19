@@ -40,4 +40,5 @@ dependencies = [
     "rtree>=1.4.0",
     "pytest>=8.3.5",
     "ipytest>=0.14.2",
+    "fast-simplification>=0.1.9",
 ]
