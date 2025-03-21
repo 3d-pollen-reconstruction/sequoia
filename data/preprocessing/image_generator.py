@@ -11,9 +11,10 @@ from vtk.util.numpy_support import vtk_to_numpy
 logger = logging.getLogger(__name__)
 
 class ImageGenerator:
-    def __init__(self, raw_mesh_dir: str = 'raw', output_dir: str = 'processed'):
+    def __init__(self, raw_mesh_dir: str = 'raw', output_dir: str = 'processed', random_seed: int = 1337):
         self.raw_mesh_dir = raw_mesh_dir
         self.output_dir = output_dir
+        self.random_seed = random_seed
         self.data_dir = os.getenv("DATA_DIR_PATH")
         if not self.data_dir:
             raise EnvironmentError("DATA_DIR_PATH environment variable not set.")
@@ -166,6 +167,8 @@ class ImageGenerator:
         """
         For each missing mesh file, generate a concatenated image of two orthogonal views.
         """
+        np.random.seed(self.random_seed)
+        
         images_dir = os.path.join(self.data_dir, self.output_dir, "images")
         os.makedirs(images_dir, exist_ok=True)
 
