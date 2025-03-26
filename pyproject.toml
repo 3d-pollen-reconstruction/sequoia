@@ -42,4 +42,5 @@ dependencies = [
     "ipytest>=0.14.2",
     "fast-simplification>=0.1.9",
     "meshio>=5.3.5",
+    "pymeshlab>=2023.12.post3",
 ]
