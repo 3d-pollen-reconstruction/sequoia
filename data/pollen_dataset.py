@@ -7,6 +7,7 @@ import trimesh
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
+from sklearn.model_selection import train_test_split
 
 load_dotenv()
 
@@ -46,3 +47,13 @@ class PollenDataset(Dataset):
             vertices, faces = self.mesh_transform(vertices, faces)
         
         return (left_image, right_image), (vertices, faces)
+    
+# At the bottom of your PollenDataset file
+from sklearn.model_selection import train_test_split
+
+def get_train_test_split(test_ratio=0.2, seed=42, **kwargs):
+    dataset = PollenDataset(**kwargs)
+    train_ids, test_ids = train_test_split(
+        list(range(len(dataset))), test_size=test_ratio, random_state=seed
+    )
+    return dataset, train_ids, test_ids
