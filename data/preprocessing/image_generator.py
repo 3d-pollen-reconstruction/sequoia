@@ -1,5 +1,6 @@
 import logging
 import os
+import csv
 from typing import Tuple, List
 
 from tqdm import tqdm
@@ -166,11 +167,25 @@ class ImageGenerator:
     def process(self, files: List[str]) -> None:
         """
         For each missing mesh file, generate a concatenated image of two orthogonal views.
+        Also, update the rotation records in a CSV file so that only new images get a new rotation
+        and any outdated rotations for missing images are replaced.
         """
         np.random.seed(self.random_seed)
         
         images_dir = os.path.join(self.data_dir, self.output_dir, "images")
         os.makedirs(images_dir, exist_ok=True)
+
+        csv_path = os.path.join(self.data_dir, self.output_dir, "rotations.csv")
+        rotations_dict = {}
+        if os.path.exists(csv_path):
+            try:
+                with open(csv_path, "r", newline="") as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        sample = row["sample"]
+                        rotations_dict[sample] = (float(row["rot_x"]), float(row["rot_y"]), float(row["rot_z"]))
+            except Exception as e:
+                logger.error(f"Failed to load existing rotation CSV file: {e}")
 
         missing_files = self._get_missing_files(files)
         if missing_files:
@@ -192,5 +207,18 @@ class ImageGenerator:
                     Image.fromarray(np.uint8(concatenated)).save(image_path)
                 except Exception as e:
                     logger.error(f"Failed to save image for {file}: {e}")
+                    continue
+
+                rotations_dict[sample_name] = rotation
+        
+            try:
+                with open(csv_path, "w", newline="") as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(["sample", "rot_x", "rot_y", "rot_z"])
+                    for sample, rotation in rotations_dict.items():
+                        writer.writerow([sample, rotation[0], rotation[1], rotation[2]])
+                logger.info(f"Rotation data saved to {csv_path}.")
+            except Exception as e:
+                logger.error(f"Failed to save rotation CSV file: {e}")
         else:
             logger.info("Images have already been generated.")
