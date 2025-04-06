@@ -19,8 +19,7 @@ __pycache__/
 .env
 *.log
 /data/raw/*.stl
-/data/processed/*.stl
-/data/processed/**/*.png
+/data/processed/*
 /data/*.obj
 /data/*.mtl
 /data/*.png

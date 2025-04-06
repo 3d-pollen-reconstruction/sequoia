@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from PIL import Image
 import numpy as np
+import pandas as pd
 import trimesh
 import torch
 import torchvision.transforms as transforms
@@ -17,7 +18,8 @@ class PollenDataset(Dataset):
         self.image_transform = image_transforms
         self.mesh_transform = mesh_transforms
         self.image_files = os.listdir(self.images_path)
-        self.mesh_files = os.listdir(self.meshes_path)    
+        self.mesh_files = os.listdir(self.meshes_path)
+        self.rotations = pd.read_csv(os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "rotations.csv"))
 
     def __len__(self):
         return len(self.image_files)
@@ -45,4 +47,7 @@ class PollenDataset(Dataset):
         if self.mesh_transform:
             vertices, faces = self.mesh_transform(vertices, faces)
         
-        return (left_image, right_image), (vertices, faces)
+        # take the rotation values from the csv file where the 'sample' column is the filename without the extension
+        x_rotation, y_rotation, z_rotation = self.rotations.loc[self.rotations['sample'] == self.image_files[idx].split(".")[0]].values[0][1:]
+        
+        return (left_image, right_image), (vertices, faces), (x_rotation, y_rotation, z_rotation)
