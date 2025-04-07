@@ -43,4 +43,5 @@ dependencies = [
     "fast-simplification>=0.1.9",
     "meshio>=5.3.5",
     "pymeshlab>=2023.12.post3",
+    "lightning>=2.5.1",
 ]
