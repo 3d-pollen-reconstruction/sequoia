@@ -44,4 +44,6 @@ dependencies = [
     "meshio>=5.3.5",
     "pymeshlab>=2023.12.post3",
     "lightning>=2.5.1",
+    "hydra-core>=1.3.2",
+    "rootutils>=1.0.7",
 ]

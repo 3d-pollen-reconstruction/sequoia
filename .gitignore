@@ -1,6 +1,5 @@
 *.cmd
 *.exe
-**/models*
 */__pycache__*
 */.vscode*
 .vscode/
@@ -27,5 +26,7 @@ __pycache__/
 /data/*.jpeg
 /data/*.vsi
 **.stl
+
+**/outputs
 
 .DS_Store

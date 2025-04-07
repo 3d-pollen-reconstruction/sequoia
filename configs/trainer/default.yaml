@@ -1,0 +1,10 @@
+_target_: lightning.pytorch.trainer.Trainer
+
+min_epochs: 1
+max_epochs: 30
+
+accelerator: auto
+devices: 1
+
+check_val_every_n_epoch: 1
+log_every_n_steps: 0

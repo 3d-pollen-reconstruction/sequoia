@@ -1,0 +1,7 @@
+_target_: data.datamodule.PollenDataModule
+image_transforms: null
+mesh_transforms: null
+batch_size: 32
+n_splits: 5
+num_workers: 4
+seed: 1337
