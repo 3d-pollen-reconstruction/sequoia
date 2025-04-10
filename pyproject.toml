@@ -18,7 +18,6 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "requests>=2.32.3",
     "selenium>=4.29.0",
-    "torch>=2.6.0",
     "torchvision>=0.21.0",
     "trimesh>=4.6.4",
     "tqdm>=4.67.1",
@@ -42,4 +41,6 @@ dependencies = [
     "ipytest>=0.14.2",
     "fast-simplification>=0.1.9",
     "meshio>=5.3.5",
+    "pymeshlab>=2023.12.post3",
+    "jupyter-cache>=1.0.1",
 ]
