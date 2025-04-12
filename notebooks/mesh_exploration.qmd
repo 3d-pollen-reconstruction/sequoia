@@ -11,6 +11,7 @@ format:
     code-line-numbers: true
     embed-resources: true
     self-contained-math: true
+    page-layout: full
   ipynb: default
 jupyter: python3
 execute: 
@@ -579,6 +580,7 @@ show_mesh_group(smoothest, "Smoothest Meshes (Low Mean Curvature)")
 show_mesh_group(roughest, "Roughest Meshes (High Curvature Std)")
 ```
 
+
 # Experiment 6: Shape Classification – Spherical vs. Non-Spherical Pollen Grains
 
 ## General Idea
@@ -676,7 +678,255 @@ for shape in ["spherical", "ellipsoidal", "elongated", "flattened", "irregular"]
     show_examples_for_shape(shape)
 ```
 
+## More Robust shape classification
 
+### Definition and Implementation
+The classification is based on the bounding box dimensions and PCA (Principal Component Analysis) of the mesh’s point cloud. The bounding box is computed using the mesh’s axis‐aligned bounding box, and PCA is performed on the mesh’s point cloud to obtain eigenvalues that represent the variance along each axis.
+
+Let the mesh’s axis‐aligned bounding box have extents  
+$$
+d_x = x_{\max} - x_{\min},\quad d_y = y_{\max} - y_{\min},\quad d_z = z_{\max} - z_{\min}.
+$$  
+Sort these so that  
+$$
+d_{(1)} \le d_{(2)} \le d_{(3)},
+$$  
+and define the normalized bounding box ratios as  
+$$
+r_i = \frac{d_{(i)}}{d_{(3)}},\quad i=1,2,3 \quad (r_3=1).
+$$
+
+Similarly, let PCA on the mesh’s point cloud yield eigenvalues  
+$$
+\lambda_1 \le \lambda_2 \le \lambda_3,
+$$  
+and define the PCA ratios as  
+$$
+p_i = \frac{\lambda_i}{\lambda_3},\quad i=1,2,3 \quad (p_3=1).
+$$
+
+Using a tolerance \(\epsilon \approx 0.15\), the shape classes are defined as follows:
+
+- **Spherical**:  
+  $$
+  |r_i - 1| < \epsilon \quad \text{and} \quad |p_i - 1| < \epsilon \quad \text{for } i=1,2,3.
+  $$
+  
+- **Elongated**:  
+  $$
+  \min(r_1,p_1) < 0.5 \quad \text{and} \quad \max(r_2,p_2) > 0.7.
+  $$
+  
+- **Flattened**:  
+  $$
+  \min(r_1,p_1) < 0.3 \quad \text{and} \quad \max(r_2,p_2) < 0.8.
+  $$
+  
+- **Ellipsoidal**:  
+  $$
+  \max(r_1,p_1) > 0.6.
+  $$
+  
+- **Irregular**: Falls into none of the above classes.
+
+Plots with minimal convex hulls are used to visualize the shape classification. The convex hull is computed using the inlier points to reduce the effect of noise.
+$$
+H = \frac{A_{\text{hull}}}{V_{\text{hull}} + \varepsilon'},
+$$
+
+### Analysis of the Robust Classification
+
+```{python}
+import os
+import numpy as np
+import pyvista as pv
+from tqdm import tqdm
+from scipy.spatial import ConvexHull
+
+def classify_shape_robust(mesh, tolerance=0.15, use_convex_hull=True):
+    """
+    Classify a mesh into one of the following shape categories using a combination
+    of bounding box analysis, PCA-based features, and optionally convex hull metrics:
+    'spherical', 'ellipsoidal', 'elongated', 'flattened', or 'irregular'.
+
+    The approach includes:
+      - Bounding box analysis: sensitive to the overall mesh dimensions.
+      - PCA-based analysis: yields rotation invariant eigenvalues that capture the
+        point distribution.
+      - Optional convex hull analysis: provides additional robustness by considering
+        the volume-to-surface-area ratio, which can help detect extreme irregularities.
+
+    Args:
+        mesh (pyvista.PolyData): The mesh to classify.
+        tolerance (float): Threshold for heuristic deviations.
+        use_convex_hull (bool): Whether to incorporate convex hull-based features.
+
+    Returns:
+        str: The classified shape category.
+    """
+    # --- 0. Preliminary Check ---
+    if mesh.n_points == 0:
+        return "irregular"  # No points to analyze
+
+    # --- 1. Bounding Box Analysis ---
+    # Get bounds: (xmin, xmax, ymin, ymax, zmin, zmax)
+    bounds = mesh.bounds
+    bbox_dims = np.array([
+        bounds[1] - bounds[0],
+        bounds[3] - bounds[2],
+        bounds[5] - bounds[4],
+    ])
+    max_dim = np.max(bbox_dims)
+    if max_dim <= 0:
+        return "irregular"
+
+    # Sort dimensions and calculate ratios; ratios are in ascending order
+    bbox_sorted = np.sort(bbox_dims)
+    bbox_ratios = bbox_sorted / max_dim
+
+    # --- 2. PCA-Based Analysis ---
+    points = mesh.points
+
+    # Robust outlier filtering: remove points that lie farther than 3 standard deviations
+    center = np.mean(points, axis=0)
+    distances = np.linalg.norm(points - center, axis=1)
+    std_dist = np.std(distances)
+    inliers = points[distances < (3 * std_dist)]
+    if inliers.shape[0] < 3:  # Fallback in case too many points are filtered out
+        inliers = points
+
+    # Center the inlier points
+    centered = inliers - np.mean(inliers, axis=0)
+    cov = np.cov(centered, rowvar=False)
+    # Compute the eigenvalues for a symmetric covariance matrix (sorted in ascending order)
+    eigenvalues = np.linalg.eigvalsh(cov)
+    eigenvalues = np.sort(np.maximum(eigenvalues, 0))  # Ensure non-negative values
+    max_eigen = eigenvalues[-1]
+    if max_eigen <= 0:
+        return "irregular"
+    pca_ratios = eigenvalues / max_eigen
+
+    # --- 3. Optional: Convex Hull Analysis ---
+    hull_ratio = None
+    if use_convex_hull:
+        try:
+            # Calculate the convex hull using the inlier points to reduce the effect of noise
+            hull = ConvexHull(inliers)
+            hull_volume = hull.volume
+            hull_area = hull.area
+            eps = 1e-8  # small constant to avoid division by zero
+            hull_ratio = hull_area / (hull_volume + eps)
+        except Exception as e:
+            hull_ratio = None
+
+    # --- 4. Combined Classification ---
+    # Spherical: Both bounding box and PCA ratios should be nearly equal.
+    if np.all(np.abs(bbox_ratios - 1.0) < tolerance) and np.all(np.abs(pca_ratios - 1.0) < tolerance):
+        return "spherical"
+    
+    # Elongated: One compressed dimension with the other dimensions relatively high.
+    if (bbox_ratios[0] < 0.5 or pca_ratios[0] < 0.5) and (bbox_ratios[1] > 0.7 or pca_ratios[1] > 0.7):
+        return "elongated"
+    
+    # Flattened: Two dimensions are significantly compressed.
+    if (bbox_ratios[0] < 0.3 or pca_ratios[0] < 0.3) and (bbox_ratios[1] < 0.8 or pca_ratios[1] < 0.8):
+        return "flattened"
+    
+    # Ellipsoidal: Moderate deviations from spherical form that are not extremely elongated or flattened.
+    if (bbox_ratios[0] > 0.6 or pca_ratios[0] > 0.6):
+        return "ellipsoidal"
+    
+    # Extra check using convex hull metrics:
+    if hull_ratio is not None:
+        # A very high area-to-volume ratio might indicate an irregular or noisy shape.
+        if hull_ratio > 10:
+            return "irregular"
+    
+    # Default classification if none of the conditions are met.
+    return "irregular"
+
+```
+
+```{python}
+
+# --- Classification of STL files ---
+# Assumes 'stl_files' is a list of filenames and RAW_MESHES_DIR is the directory containing them.
+meshes = []         # To store the loaded pyvista meshes
+shape_labels = []   # To store the corresponding shape labels
+
+for file in tqdm(stl_files, desc="Classifying mesh shapes"):
+    file_path = os.path.join(RAW_MESHES_DIR, file)
+    try:
+        mesh = pv.read(file_path)
+        # Skip meshes with no points.
+        if mesh.n_points == 0:
+            continue
+        shape = classify_shape_robust(mesh)
+        meshes.append(mesh)
+        shape_labels.append(shape)
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+```
+
+### Shape Classification Results
+
+```{python}	
+from collections import Counter
+
+shape_counts = Counter(shape_labels)
+plt.figure(figsize=(8, 5))
+sns.barplot(x=list(shape_counts.keys()), y=list(shape_counts.values()))
+plt.title("Shape Classification of Pollen Meshes")
+plt.ylabel("Number of Meshes")
+plt.xlabel("Shape Class")
+plt.xticks(rotation=15)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+# --- 2D Projection Plot ---
+from sklearn.decomposition import PCA
+from scipy.spatial import ConvexHull
+
+# This part projects each 3D mesh into 2D using PCA and draws its convex hull outline.
+num_meshes = len(meshes)
+cols = 5  # Adjust the number of columns as desired.
+rows = num_meshes // cols + (1 if num_meshes % cols != 0 else 0)
+
+fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3 * rows))
+axes = axes.flatten()
+
+for i, (mesh, label) in enumerate(zip(meshes, shape_labels)):
+    # Get the mesh's 3D points.
+    points = mesh.points
+    # Perform PCA to reduce dimensions from 3D to 2D.
+    pca = PCA(n_components=2)
+    points_2d = pca.fit_transform(points)
+    
+    ax = axes[i]
+    # Scatter plot of the points (light blue for background points).
+    ax.scatter(points_2d[:, 0], points_2d[:, 1], s=1, color='lightblue', alpha=0.5)
+    
+    # Compute and plot the convex hull to show the overall shape.
+    if points_2d.shape[0] >= 3:
+        hull = ConvexHull(points_2d)
+        hull_points = points_2d[hull.vertices]
+        # Close the hull polygon.
+        hull_points = np.concatenate([hull_points, hull_points[0:1]], axis=0)
+        ax.plot(hull_points[:, 0], hull_points[:, 1], 'r-', lw=2)
+    
+    ax.set_title(label, fontsize=10)
+    ax.axis('equal')
+    ax.axis('off')
+
+# Remove any unused subplots.
+for j in range(i + 1, len(axes)):
+    axes[j].remove()
+
+plt.tight_layout()
+plt.show()
+```
 
 # Mesh Statistics and Summary
 ## Table Summary
@@ -730,7 +980,3 @@ The experiments reveal the following key findings:
 # Conclusion
 
 This exploratory analysis of raw 3D meshes has provided a comprehensive overview of mesh quality, consistency, and potential anomalies. The combined visualization, property computation, and duplicate detection techniques offer a robust framework for preliminary data quality assessment. Future work may focus on refining these metrics and incorporating additional geometric and topological analyses for improved mesh validation and processing.
-
----
-
-This document can be rendered directly using Quarto, providing both the code and a detailed narrative suitable for a scientific publication or internal report.
