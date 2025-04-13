@@ -26,6 +26,7 @@ __pycache__/
 /data/*.jpeg
 /data/*.vsi
 **.stl
+*/.jupyter_cache
 
 **/outputs
 
