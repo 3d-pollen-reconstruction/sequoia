@@ -59,7 +59,7 @@ def train(cfg: DictConfig) -> None:
 
     if cfg.get("train"):
         logger.info("Starting training!")
-        trainer.fit(model, datamodule, ckpt_path=cfg.ckpt_path)
+        trainer.fit(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
         logger.info("Training completed.")
     train_metrics = trainer.callback_metrics
 
@@ -72,6 +72,7 @@ def train(cfg: DictConfig) -> None:
         logger.info(f"Loading best model from {ckpt_path} for testing...")
         trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
         logger.info("Testing completed.")
+
     test_metrics = trainer.callback_metrics
 
     logger.info("Cleaning up...")
@@ -85,10 +86,22 @@ def train(cfg: DictConfig) -> None:
 
 @hydra.main(config_path=str(CONFIG_ROOT), config_name="train", version_base="1.3")
 def main(cfg: DictConfig) -> Optional[float]:
-    metric_dict, _ = train(cfg)
-    logger.info(f"Final Metrics: {metric_dict}")
+    fold_metrics = {}
 
-    return metric_dict
+    for fold in range(cfg.data.n_splits):
+        logger.info(f"Starting fold {fold}")
+        cfg.data.fold_idx = fold
+
+        current_metrics, _ = train(cfg)
+
+        for key, value in current_metrics.items():
+            fold_metrics.setdefault(key, []).append(value)
+        logger.info(f"Fold {fold} Metrics: {current_metrics}")
+
+    averaged_metrics = {key: sum(values)/len(values) for key, values in fold_metrics.items()}
+    logger.info(f"Averaged Metrics across {cfg.data.n_splits} folds: {averaged_metrics}")
+
+    return averaged_metrics
 
 if __name__ == "__main__":
     main()
