@@ -3,6 +3,7 @@ import logging
 
 from image_generator import ImageGenerator
 from mesh_processor import MeshProcessor
+from pointcloud_generator import PointCloudGenerator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -11,6 +12,7 @@ class Pipeline:
     def __init__(self, raw_mesh_dir='raw', output_dir='processed'):
         self.mesh_processor = MeshProcessor(raw_mesh_dir=raw_mesh_dir, output_dir=output_dir)
         self.image_generator = ImageGenerator(raw_mesh_dir=raw_mesh_dir, output_dir=output_dir)
+        self.pointcloud_generator = PointCloudGenerator(raw_mesh_dir=raw_mesh_dir, output_dir=output_dir)
         self.raw_mesh_dir = raw_mesh_dir
         self.raw_meshes = None
 
@@ -25,3 +27,4 @@ class Pipeline:
         self._load_meshes()
         self.image_generator.process(self.raw_meshes)
         self.mesh_processor.process(self.raw_meshes)
+        self.pointcloud_generator.process(self.raw_meshes)
