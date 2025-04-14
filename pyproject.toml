@@ -41,9 +41,9 @@ dependencies = [
     "ipytest>=0.14.2",
     "fast-simplification>=0.1.9",
     "meshio>=5.3.5",
-    "pymeshlab>=2023.12.post3",
     "jupyter-cache>=1.0.1",
     "lightning>=2.5.1",
     "hydra-core>=1.3.2",
     "rootutils>=1.0.7",
+    "pymeshlab==2023.12.post2",
 ]

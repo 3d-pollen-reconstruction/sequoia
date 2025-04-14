@@ -8,8 +8,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class PointCloudGenerator:
-    def __init__(self, raw_mesh_dir='raw', output_dir='processed'):
-        self.raw_mesh_dir = raw_mesh_dir
+    def __init__(self, input_mesh_dir='processed/meshes', output_dir='processed'):
+        self.input_mesh_dir = input_mesh_dir
         self.output_dir = output_dir
 
     def _get_missing_files(self, files: list = None):
@@ -21,6 +21,7 @@ class PointCloudGenerator:
         # Assume output files use the same base name but with a .npz extension.
         processed_bases = {os.path.splitext(f)[0] for f in folder_files}
         missing_meshes = [f for f in files if os.path.splitext(f)[0] not in processed_bases]
+        print(f'missing meshes: {missing_meshes}')
         return missing_meshes
 
     def process(self, files: list = None, num_points: int = 4000):
@@ -35,7 +36,7 @@ class PointCloudGenerator:
         
         if files is None:
             # If no specific file list is provided, use all files in the raw directory.
-            raw_dir = os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir)
+            raw_dir = os.path.join(os.getenv("DATA_DIR_PATH"), self.input_mesh_dir)
             files = os.listdir(raw_dir)
         
         missing_files = self._get_missing_files(files)
@@ -43,7 +44,7 @@ class PointCloudGenerator:
         if len(missing_files) != 0:
             logger.info(f"Found {len(missing_files)} of {len(files)} meshes to turn into point clouds.")
             for file in tqdm(missing_files, desc="Generating Pointclouds"):
-                mesh_path = os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir, file)
+                mesh_path = os.path.join(os.getenv("DATA_DIR_PATH"), self.input_mesh_dir, file)
                 try:
                     # Load the mesh using trimesh (forcing the load as a mesh)
                     mesh = trimesh.load(mesh_path, force='mesh')

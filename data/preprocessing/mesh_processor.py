@@ -7,6 +7,8 @@ import pyvista as pv
 import trimesh
 import numpy as np
 import pymeshlab
+import multiprocessing as mp
+mp.set_start_method('spawn', force=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,10 +73,11 @@ class MeshProcessor:
             logger.info(f"Found {len(missing_files)} of {len(files)} files to simplify.")
             for file in tqdm(missing_files, desc="Simplifying meshes"):
                 mesh = trimesh.load_mesh(os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir, file))
-                watertight_mesh = self._make_watertight(mesh)
-                
+                if not mesh.is_watertight:
+                    mesh = self._make_watertight(mesh)
+
                 # turning the mesh into a pyvista mesh for simplification
-                mesh = pv.wrap(watertight_mesh)                
+                mesh = pv.wrap(mesh)                
                 simplified_mesh = self._simplify_mesh(mesh)
                 
                 mesh_path = os.path.join(meshes_dir, file)

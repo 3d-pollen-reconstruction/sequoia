@@ -2248,24 +2248,20 @@ wheels = [
 
 [[package]]
 name = "pymeshlab"
-version = "2023.12.post3"
+version = "2023.12.post2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/be/7a/827713a291ef7dc05fbc6004732798404e324fb404817b6cdd12ffa1177e/pymeshlab-2023.12.post3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:898f6dfb4102224f73400ed3153cdf9fea9a67879e300f20f9803278ee2c195a", size = 70569836 },
-    { url = "https://files.pythonhosted.org/packages/3e/55/c746e7157ee343e211591dddd72099f5e8f1202b162892278015649db2b7/pymeshlab-2023.12.post3-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:a9f1ce44e0bd7fbc72b1b0e38180e46455c643963af45aa535a1b3436ea8e6b0", size = 49696074 },
-    { url = "https://files.pythonhosted.org/packages/2a/62/bd156d2a03a2a79ee7f2e60a06929d6ea9f1e5bd1a40726da69b97e2ab5c/pymeshlab-2023.12.post3-cp311-cp311-manylinux_2_31_x86_64.whl", hash = "sha256:f77a41a67618ea4d976b99aeaf615dfca8562154c3275e4554c4428292408e94", size = 98457761 },
-    { url = "https://files.pythonhosted.org/packages/7c/ca/00d68af6aa60ea5bb66b5e3a85cf7ed79fc874bb63ad935673dee78a419e/pymeshlab-2023.12.post3-cp311-cp311-win_amd64.whl", hash = "sha256:943141c7ac37add011c279eac7eab3f50edd3e1df42376288de53b751519c271", size = 52895990 },
-    { url = "https://files.pythonhosted.org/packages/28/5d/d2dd826bf8b5e5d1b36a06eefd138c3cd05144488390035f1e73903683bc/pymeshlab-2023.12.post3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:01cc614be9d2c29300cd39ae3147f9b2c611db03425c4ec52c193f64d7871dc3", size = 70570362 },
-    { url = "https://files.pythonhosted.org/packages/70/1d/dc7aa2260278a04290ae78c9641906338d77370a8d8898b1efdbc1008b3e/pymeshlab-2023.12.post3-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:b2c8a90164f68f79170aabcddbe467d6392b217b482e68b3c7c35950beed335d", size = 49697158 },
-    { url = "https://files.pythonhosted.org/packages/51/11/40b9a8a318820eec9ff05a98c1b8678eedae6c97e8e7dccaba4ed538439f/pymeshlab-2023.12.post3-cp312-cp312-manylinux_2_31_x86_64.whl", hash = "sha256:f2bb4c25d4df434908677d77a66f61b1bed036f49656c8425c3a2496468c3167", size = 98741567 },
-    { url = "https://files.pythonhosted.org/packages/c5/52/dfa6096c620cf7d5ec2037dacbbd0787974d188f783c9d9dbcb9b7d0fd96/pymeshlab-2023.12.post3-cp312-cp312-win_amd64.whl", hash = "sha256:346b53c00241693feca2c9843d72fb750c0cfc78bd5aa44d905ec0570de3997f", size = 52895966 },
-    { url = "https://files.pythonhosted.org/packages/5e/e3/fa6e77099782a3edb8b00ca50eaca87fff9c02c01d0073e367621bef81db/pymeshlab-2023.12.post3-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:0bde97a468d21e504e22084b6f1b75f66f4fea7e70e3b1eaa25f3d27336aacc2", size = 70570591 },
-    { url = "https://files.pythonhosted.org/packages/46/08/9ece00f50582f542d2cf9188f96de364fbc2887faafc41105d965a9afbcd/pymeshlab-2023.12.post3-cp313-cp313-macosx_11_0_x86_64.whl", hash = "sha256:111fe0c6f294584948dc62a5fec394e81276c5aec61d83535557e58159ad621d", size = 49697297 },
-    { url = "https://files.pythonhosted.org/packages/27/9b/72abf13d20ecdc9814cbd4c8f3ca331ea16e3b7ddfa1852ec02d52810af6/pymeshlab-2023.12.post3-cp313-cp313-manylinux_2_31_x86_64.whl", hash = "sha256:4191f8b5d14cdc94704dd4111dd6eef639fab5ecefd05e38060f911ba07c3990", size = 98611897 },
-    { url = "https://files.pythonhosted.org/packages/aa/f7/7020606a89801f6df5af4d6c454d96ae135174a6c00e0d11054dfabb5318/pymeshlab-2023.12.post3-cp313-cp313-win_amd64.whl", hash = "sha256:89581a9978a164075eca43ad541ef513a853e3bbf487a2569d89fd3de815fcc6", size = 52895925 },
+    { url = "https://files.pythonhosted.org/packages/91/28/70482702d0ebe06d974b604a60c2de219c89fac3f10f1f58b550387b6c31/pymeshlab-2023.12.post2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:6f0ca88cbea6d356244e4c93f0e4eff30bb71e35f4dcac591ffbbb26520160f2", size = 69948736 },
+    { url = "https://files.pythonhosted.org/packages/36/0e/e3f148fb94a79f236a3904ea3656d1f93437f67340258f130713bd3858be/pymeshlab-2023.12.post2-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:0068a451cf1fe9a2109eec87c1adbd4555a22e8d64d3521dc572b7f9c9b5e89c", size = 49676612 },
+    { url = "https://files.pythonhosted.org/packages/ef/fa/0a1766a70d91660921de2ebab24b581f5a5efcb0210de7b72d6963f7ec70/pymeshlab-2023.12.post2-cp311-cp311-manylinux_2_31_x86_64.whl", hash = "sha256:49012717642015f77464dcb903e3ef863244395f1aedb00996120323fc656031", size = 98395071 },
+    { url = "https://files.pythonhosted.org/packages/69/e8/b28d341695a87eff372199f8772ba8877cf5fb057c82dc8acccb74c2a42f/pymeshlab-2023.12.post2-cp311-cp311-win_amd64.whl", hash = "sha256:4d2ff5d9879abb33609a9b9920e3fa14cdbb2adcf5864c0ad1d07859ec71d95f", size = 52783315 },
+    { url = "https://files.pythonhosted.org/packages/4b/28/b23fe221cc4df20aa54c4aaa4657b557ec9074aa98228b228d22055c6b09/pymeshlab-2023.12.post2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:0a4510428d58defd11e4f5ebc82e934b36425defc11c9d630c1c3f82111c0d5a", size = 69949461 },
+    { url = "https://files.pythonhosted.org/packages/f8/87/24c9906ae23ad04e2907130615a42ca69a9c29466647f7e1e497c73ffe9e/pymeshlab-2023.12.post2-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:bcf0fc697f5eadb3d4376b09abd2911763fee76fec21e995773be59d179e3aa5", size = 49677699 },
+    { url = "https://files.pythonhosted.org/packages/23/f4/e269be21b206891b20e502baf5ad5e0333626c9a1836064ec5849a020f12/pymeshlab-2023.12.post2-cp312-cp312-manylinux_2_31_x86_64.whl", hash = "sha256:d3e296bb8cfe067e84e4c900d8604f292aedaa3fa653df599ffac3ce96cb20fb", size = 98678652 },
+    { url = "https://files.pythonhosted.org/packages/3d/66/a808d58f3e9a511b7a8dcc4a95b4e9264b3aec0246924cdec40bc1dcc2ce/pymeshlab-2023.12.post2-cp312-cp312-win_amd64.whl", hash = "sha256:d0dec5bd334bca1414e3e961200c4762061129100bfd6c0ca2ed059d5019fd79", size = 52783405 },
 ]
 
 [[package]]
@@ -2849,8 +2845,8 @@ dependencies = [
     { name = "ipytest" },
     { name = "ipyvtklink" },
     { name = "ipywidgets" },
-    { name = "lightning" },
     { name = "jupyter-cache" },
+    { name = "lightning" },
     { name = "manifold" },
     { name = "manifold3d" },
     { name = "matplotlib" },
@@ -2894,8 +2890,8 @@ requires-dist = [
     { name = "ipytest", specifier = ">=0.14.2" },
     { name = "ipyvtklink", specifier = ">=0.2.2" },
     { name = "ipywidgets", specifier = ">=8.1.5" },
-    { name = "lightning", specifier = ">=2.5.1" },
     { name = "jupyter-cache", specifier = ">=1.0.1" },
+    { name = "lightning", specifier = ">=2.5.1" },
     { name = "manifold", specifier = ">=0.2.0" },
     { name = "manifold3d", specifier = ">=3.0.1" },
     { name = "matplotlib", specifier = ">=3.10.0" },
@@ -2906,7 +2902,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pip", specifier = ">=25.0.1" },
     { name = "pyglet", specifier = "<2" },
-    { name = "pymeshlab", specifier = ">=2023.12.post3" },
+    { name = "pymeshlab", specifier = "==2023.12.post2" },
     { name = "pyntcloud", specifier = ">=0.3.1" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "python-dotenv", specifier = ">=1.0.1" },

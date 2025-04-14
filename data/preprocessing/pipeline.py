@@ -12,13 +12,16 @@ class Pipeline:
     def __init__(self, raw_mesh_dir='raw', output_dir='processed'):
         self.mesh_processor = MeshProcessor(raw_mesh_dir=raw_mesh_dir, output_dir=output_dir)
         self.image_generator = ImageGenerator(raw_mesh_dir=raw_mesh_dir, output_dir=output_dir)
-        self.pointcloud_generator = PointCloudGenerator(raw_mesh_dir=raw_mesh_dir, output_dir=output_dir)
+        self.pointcloud_generator = PointCloudGenerator(input_mesh_dir='processed/meshes', output_dir=output_dir)
         self.raw_mesh_dir = raw_mesh_dir
+        self.output_dir = output_dir
         self.raw_meshes = None
+        self.processed_meshes = None
 
     def _load_meshes(self):
         files = os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir)
         self.raw_meshes = [f for f in os.listdir(files) if f.lower().endswith('.stl')]
+        self.processed_meshes = [f for f in os.listdir(os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir)) if f.lower().endswith('.stl')]
         if self.raw_meshes is None:
             logger.error(f"No .stl files found in {files}")
         logger.info(f"Found {len(self.raw_meshes)} meshes in {files}")

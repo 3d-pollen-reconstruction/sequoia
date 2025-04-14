@@ -16,6 +16,7 @@ class PollenDataset(Dataset):
     def __init__(self, image_transforms=None, mesh_transforms=None):
         self.images_path = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "images")
         self.meshes_path = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "meshes")
+        self.pointclouds_path = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "pointclouds")
         self.image_transform = image_transforms
         self.mesh_transform = mesh_transforms
         self.image_files = os.listdir(self.images_path)
@@ -48,14 +49,12 @@ class PollenDataset(Dataset):
         if self.mesh_transform:
             vertices, faces = self.mesh_transform(vertices, faces)
         
-        # take the rotation values from the csv file where the 'sample' column is the filename without the extension
         x_rotation, y_rotation, z_rotation = self.rotations.loc[self.rotations['sample'] == self.image_files[idx].split(".")[0]].values[0][1:]
-        
-        return (left_image, right_image), (vertices, faces), (x_rotation, y_rotation, z_rotation)
-        return (left_image, right_image), (vertices, faces)
-    
-# At the bottom of your PollenDataset file
-from sklearn.model_selection import train_test_split
+
+        pointcloud_path = os.path.join(self.pointclouds_path, self.image_files[idx].replace(".png", ".npz"))
+        points = torch.from_numpy(np.load(pointcloud_path)['points'])
+
+        return (left_image, right_image), points, (x_rotation, y_rotation, z_rotation)
 
 def get_train_test_split(test_ratio=0.2, seed=42, **kwargs):
     dataset = PollenDataset(**kwargs)
