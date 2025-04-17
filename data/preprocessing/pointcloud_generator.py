@@ -21,7 +21,7 @@ class PointCloudGenerator:
         # Assume output files use the same base name but with a .npz extension.
         processed_bases = {os.path.splitext(f)[0] for f in folder_files}
         missing_meshes = [f for f in files if os.path.splitext(f)[0] not in processed_bases]
-        print(f'missing meshes: {missing_meshes}')
+        
         return missing_meshes
 
     def process(self, files: list = None, num_points: int = 4000):

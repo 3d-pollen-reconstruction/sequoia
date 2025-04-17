@@ -12,8 +12,8 @@ class VisualHull(pl.LightningModule):
         batch_voxels = []
         
         for ft, st in zip(front_tensor, side_tensor):
-            front_np = ft.squeeze().detach().cpu().numpy()  # This should be (1024, 1024)
-            side_np = st.squeeze().detach().cpu().numpy()     # This should be (1024, 1024)
+            front_np = ft.squeeze().detach().cpu().numpy()
+            side_np = st.squeeze().detach().cpu().numpy()
             
             front_bin = (front_np > 0).astype(np.uint8)
             side_bin = (side_np > 0).astype(np.uint8)

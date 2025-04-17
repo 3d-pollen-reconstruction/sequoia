@@ -4,6 +4,7 @@ import logging
 from image_generator import ImageGenerator
 from mesh_processor import MeshProcessor
 from pointcloud_generator import PointCloudGenerator
+from mesh_repairer import MeshRepairer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ class Pipeline:
         self.mesh_processor = MeshProcessor(raw_mesh_dir=raw_mesh_dir, output_dir=output_dir)
         self.image_generator = ImageGenerator(raw_mesh_dir=raw_mesh_dir, output_dir=output_dir)
         self.pointcloud_generator = PointCloudGenerator(input_mesh_dir='processed/meshes', output_dir=output_dir)
+        self.mesh_repairer = MeshRepairer(raw_mesh_dir=raw_mesh_dir, output_dir=output_dir)
         self.raw_mesh_dir = raw_mesh_dir
         self.output_dir = output_dir
         self.raw_meshes = None
@@ -28,6 +30,7 @@ class Pipeline:
 
     def run(self):
         self._load_meshes()
+        self.mesh_repairer.process(self.raw_meshes)
         self.image_generator.process(self.raw_meshes)
         self.mesh_processor.process(self.raw_meshes)
         self.pointcloud_generator.process(self.raw_meshes)
