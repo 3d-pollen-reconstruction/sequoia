@@ -28,6 +28,9 @@ class PollenDataset(Dataset):
 
     def __getitem__(self, idx):
         image_path = os.path.join(self.images_path, self.image_files[idx])
+        mesh_path = self.image_files[idx].replace(".png", ".stl")
+        pointcloud_path = self.image_files[idx].replace(".png", ".npz")
+
         image = Image.open(image_path).convert("L")
         width, height = image.size
         
@@ -35,26 +38,38 @@ class PollenDataset(Dataset):
         right_image = image.crop((width // 2, 0, width, height))
         
         if self.image_transform:
-            left_image = self.image_transform(left_image)
-            right_image = self.image_transform(right_image)
+            left_image = self.image_transform(left_image).to(torch.float32)
+            right_image = self.image_transform(right_image).to(torch.float32)
         else:
-            left_image = transforms.ToTensor()(left_image).squeeze(0)
-            right_image = transforms.ToTensor()(right_image).squeeze(0)
+            left_image = transforms.ToTensor()(left_image).squeeze(0).to(torch.float32)
+            right_image = transforms.ToTensor()(right_image).squeeze(0).to(torch.float32)
         
-        mesh_path = os.path.join(self.meshes_path, self.mesh_files[idx])
-        mesh = trimesh.load(mesh_path)
-        vertices = torch.tensor(mesh.vertices, dtype=torch.float32)
-        faces = torch.tensor(mesh.faces, dtype=torch.long)
+        mesh_path = os.path.join(self.meshes_path, mesh_path)
+        #mesh = trimesh.load(mesh_path)
+        #vertices = torch.tensor(mesh.vertices, dtype=torch.float32)
+        #faces = torch.tensor(mesh.faces, dtype=torch.long)
         
-        if self.mesh_transform:
-            vertices, faces = self.mesh_transform(vertices, faces)
+        #if self.mesh_transform:
+        #    vertices, faces = self.mesh_transform(vertices, faces)
         
-        x_rotation, y_rotation, z_rotation = self.rotations.loc[self.rotations['sample'] == self.image_files[idx].split(".")[0]].values[0][1:]
+        x_rotation, y_rotation, z_rotation = [
+            float(val) for val in self.rotations.loc[
+                self.rotations['sample'] == self.image_files[idx].split(".")[0]
+            ].values[0][1:]
+        ]
 
-        pointcloud_path = os.path.join(self.pointclouds_path, self.image_files[idx].replace(".png", ".npz"))
-        points = torch.from_numpy(np.load(pointcloud_path)['points'])
+        rotations = self.rotations.loc[
+            self.rotations['sample'] == self.image_files[idx].split(".")[0]
+        ].values[0][1:]
+        # Convert each rotation value to a Python float before creating the tensor
+        rotations = [float(r) for r in rotations]
+        rotations = torch.tensor(rotations, dtype=torch.float32)
+        x_rotation, y_rotation, z_rotation = rotations
 
-        return (left_image, right_image), points, (x_rotation, y_rotation, z_rotation)
+        pointcloud_path = os.path.join(self.pointclouds_path, pointcloud_path)
+        points = torch.from_numpy(np.load(pointcloud_path)['points']).to(torch.float32)
+
+        return (left_image, right_image), points, (x_rotation, y_rotation, z_rotation), mesh_path
 
 def get_train_test_split(test_ratio=0.2, seed=42, **kwargs):
     dataset = PollenDataset(**kwargs)

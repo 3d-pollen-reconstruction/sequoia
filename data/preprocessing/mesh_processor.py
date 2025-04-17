@@ -73,8 +73,8 @@ class MeshProcessor:
             logger.info(f"Found {len(missing_files)} of {len(files)} files to simplify.")
             for file in tqdm(missing_files, desc="Simplifying meshes"):
                 mesh = trimesh.load_mesh(os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir, file))
-                if not mesh.is_watertight:
-                    mesh = self._make_watertight(mesh)
+                
+                mesh = self._make_watertight(mesh)
 
                 # turning the mesh into a pyvista mesh for simplification
                 mesh = pv.wrap(mesh)                

@@ -3,6 +3,7 @@ import os
 
 from tqdm import tqdm
 import pyvista as pv
+import trimesh
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,20 +19,16 @@ class VoxelGenerator:
         return list(missing_meshes)
 
     def process(self, files: list = None):
-        meshes_dir = os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir, "voxels")
-        os.makedirs(meshes_dir, exist_ok=True)
+        voxels_dir = os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir, "voxels")
+        os.makedirs(voxels_dir, exist_ok=True)
         
         missing_files = self._get_missing_files(files)
         
         if len(missing_files) != 0:
             logger.info(f"Found {len(missing_files)} of {len(files)} meshes to turn into voxels.")
-            for file in tqdm(missing_files, desc="Generating Voxels"):
-                mesh = pv.read(os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir, file))
-                
-                # generate voxel from mesh in a 1024x1024x1024 grid
-                
-                voxel_path = os.path.join(meshes_dir, file)
-                
-                # save voxel
+            for file in tqdm(missing_files, desc="Voxelizing Meshes"):
+                mesh = trimesh.load(os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "meshes", file))
+                voxel = mesh.voxelize(pitch=1.0)
+                voxel.save(os.path.join(voxels_dir, file.replace(".stl", ".npz")))
         else:
             logger.info("Meshes have already been turned into Voxels.")
