@@ -29,6 +29,8 @@ __pycache__/
 **.npz
 */.jupyter_cache
 
+lightning_logs/
+
 **/outputs
 
 .DS_Store

@@ -10,6 +10,7 @@ import torch
 import rootutils
 from hydra.utils import instantiate
 from omegaconf import DictConfig
+from metrics import init_metrics
 
 sys.path.insert(0, os.getcwd())
 
@@ -41,6 +42,9 @@ def train(cfg: DictConfig) -> None:
     logger.info(f"Instantiating model <{cfg.model._target_}>")
     model = instantiate(cfg.model)
 
+    init_metrics(model, "train")
+    init_metrics(model, "val")
+    
     logger.info("Instantiating callbacks...")
     callbacks = instantiate(cfg.get("callbacks"))
 
@@ -61,8 +65,10 @@ def train(cfg: DictConfig) -> None:
         logger.info("Starting training!")
         trainer.fit(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
         logger.info("Training completed.")
+    
     train_metrics = trainer.callback_metrics
-
+    logger.info(f"Training metrics callback: {train_metrics}")
+    
     if cfg.get("test"):
         logger.info("Starting testing!")
         ckpt_path = trainer.checkpoint_callback.best_model_path
