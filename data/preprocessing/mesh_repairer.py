@@ -16,7 +16,9 @@ class MeshRepairer:
         self.output_dir = output_dir
 
     def _get_missing_files(self, files: list = None):
-        folder_files = os.listdir(os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir, "meshes"))
+        meshes_dir = os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir, "meshes")
+        os.makedirs(meshes_dir, exist_ok=True)
+        folder_files = os.listdir(meshes_dir)
         missing_meshes = set(files) - set(folder_files)
         return list(missing_meshes)
 
