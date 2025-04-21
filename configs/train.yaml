@@ -5,7 +5,7 @@ defaults:
   - model: visual_hull
   - data: default
   - trainer: default
-  - experiment: null
+  - experiment: default
 
 ckpt_path: null
 

@@ -25,7 +25,7 @@ class IoU3D(Metric):
         self,
         threshold: float = 0.5,
         dist_sync_on_step: bool = False,
-    ):  # pragma: no cover
+    ):
         super().__init__(dist_sync_on_step=dist_sync_on_step)
         self.threshold = threshold
 
@@ -104,27 +104,26 @@ class MetricsMixin:
         
         for name, metric in metrics.items():
             metric.update(y_pred, y_true)
-            logger.info(f"Updated {name} metric for stage: {stage}")
+        logger.info(f"Updated metrics for stage: {stage} with {metrics}")
     
     def finalize_metrics(self, stage: str) -> None:
         """Compute and log metrics with label-aware names."""
         metrics: Dict[str, Metric] = getattr(self, f"metrics_{stage}")
-
+        logger.info(f"Finalizing metrics for stage: {stage} with {metrics}")
         log_dict = {}
         for key, metric in metrics.items():
             name = key.split(f"_{stage}")[0]
+            log_key = f"fold_{self.fold}/{stage}/{name}"
             try:
                 metric_value = metric.compute()
-
-                log_key = f"{stage}/{name}"
+                logger.info(f"Computed metric {name} with value: {metric_value}")
                 log_dict[log_key] = (
-                    metric_value.item()
-                    if isinstance(metric_value, torch.Tensor)
+                    metric_value.item() if isinstance(metric_value, torch.Tensor)
                     else metric_value
                 )
 
                 metric.reset()
             except Exception as e:
                 print(f"Error computing metric {name}: {str(e)}")
-
+        logger.info(f"Setting self.log_dict to {log_dict}")
         self.log_dict(log_dict, prog_bar=True)
