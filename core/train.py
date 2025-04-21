@@ -4,13 +4,15 @@ import gc
 import logging
 from typing import Optional
 
+from metrics import init_metrics
 import hydra
+from omegaconf import OmegaConf
 import lightning as L
 import torch
 import rootutils
 from hydra.utils import instantiate
 from omegaconf import DictConfig
-from metrics import init_metrics
+from pytorch_lightning.loggers import WandbLogger
 
 sys.path.insert(0, os.getcwd())
 
@@ -50,9 +52,16 @@ def train(cfg: DictConfig) -> None:
 
     logger.info("Instantiating loggers...")
     log_instances = instantiate(cfg.get("logger"))
+    
+    flat_cfg = OmegaConf.to_container(cfg, resolve=True)  
+    wandb_logger = WandbLogger(
+        project="reconstruction",
+        name=cfg.get("name"),
+        config=flat_cfg
+    )
 
     logger.info(f"Instantiating trainer <{cfg.trainer._target_}>")
-    trainer = instantiate(cfg.trainer, logger=log_instances, callbacks=callbacks)
+    trainer = instantiate(cfg.trainer, logger=wandb_logger, callbacks=callbacks)
 
     object_dict = {
         "cfg": cfg,
