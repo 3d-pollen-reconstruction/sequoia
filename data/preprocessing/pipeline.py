@@ -57,7 +57,7 @@ class Pipeline:
         self._load_meshes()
         self.mesh_repairer.process(self.raw_meshes)
         self.image_generator.process(self.raw_meshes)
-        self.multi_view_generator.process(self.raw_meshes)
+        #self.multi_view_generator.process(self.raw_meshes)
         self.mesh_processor.process(self.raw_meshes)
         self.voxel_generator.process(self.raw_meshes)
         self.pointcloud_generator.process(self.raw_meshes)
