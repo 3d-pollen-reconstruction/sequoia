@@ -7,10 +7,9 @@ def training(model, optimizer, scheduler, tn, tf, nb_bins, nb_epochs, data_loade
     training_loss = []
     for epoch in (range(nb_epochs)):
         for batch in tqdm(data_loader):
-            o = batch[:, :3].to(device)
-            d = batch[:, 3:6].to(device)
-            
-            target = batch[:, 6:].to(device)
+            o = batch[:, :3].type(torch.float32).to(device)
+            d = batch[:, 3:6].type(torch.float32).to(device)
+            target = batch[:, 6:].type(torch.float32).to(device)
             
             prediction = rendering(model, o, d, tn, tf, nb_bins=nb_bins, device=device)
             
