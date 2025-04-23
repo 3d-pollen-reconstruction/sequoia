@@ -53,4 +53,5 @@ dependencies = [
     "optuna>=4.3.0",
     "pymcubes>=0.1.6",
     "open3d>=0.19.0",
+    "pyrender>=0.1.45",
 ]
