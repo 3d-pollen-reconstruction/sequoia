@@ -1,8 +1,10 @@
 import gc
 import sys
 import os
+import re
 import logging
 import rootutils
+from collections import defaultdict
 from typing import Dict, List
 import torch
 import lightning.pytorch as pl
@@ -57,9 +59,17 @@ def train_fold(
     # training
     trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
 
-    # validation
-    val_results = trainer.validate(model, datamodule=datamodule)
+    val_results_list = trainer.validate(model, datamodule=datamodule)
 
+    if not val_results_list:          # safety check, shouldn’t happen
+        val_results = {}
+    elif len(val_results_list) == 1:  # the common case: one val dataloader
+        val_results = val_results_list[0]
+    else:                             # >1 dataloader – merge the dicts
+        val_results = {}
+        for d, dl_dict in enumerate(val_results_list):
+            for k, v in dl_dict.items():
+                val_results[f"dl{d}/{k}"] = v
     # cleanup
     torch.cuda.empty_cache()
     gc.collect()
@@ -99,20 +109,28 @@ def run_cv(cfg: DictConfig) -> Dict[str, float]:
                 entries.append(f"{k}={v}")
         logger.info(f"Fold {fold} metrics: " + ", ".join(entries))
 
-    # compute CV summary: mean and std for each metric
+    
+    metric_buckets: defaultdict[str, list] = defaultdict(list)
+    rx = re.compile(r"(?:dl\d+/)?fold_\d+/(.*)")   # capture metric suffix
+
+    for fold_dict in all_fold_metrics:
+        for k, v in fold_dict.items():
+            m = rx.match(k)
+            metric_name = m.group(1) if m else k       # fallback: keep key
+            metric_buckets[metric_name].append(v)
+
     summary_metrics: Dict[str, float] = {}
-    keys = all_fold_metrics[0].keys() if all_fold_metrics else []
-    for key in keys:
-        values = [fm.get(key) for fm in all_fold_metrics]
-        # filter out None and non-numerics
+    for metric_name, values in metric_buckets.items():
         nums = [v for v in values if isinstance(v, (int, float))]
         if not nums:
             continue
+
         mean_val = statistics.mean(nums)
-        std_val = statistics.stdev(nums) if len(nums) > 1 else 0.0
-        safe = key.replace('/', '_')
+        std_val  = statistics.stdev(nums) if len(nums) > 1 else 0.0
+
+        safe = metric_name.replace('/', '_')
         summary_metrics[f"cv/mean_{safe}"] = mean_val
-        summary_metrics[f"cv/std_{safe}"] = std_val
+        summary_metrics[f"cv/std_{safe}"]  = std_val
 
     # log summary to W&B run
     for k, v in summary_metrics.items():
