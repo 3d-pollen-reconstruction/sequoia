@@ -31,32 +31,22 @@ class VisualHull(MetricsMixin, pl.LightningModule):
         # intersection: bool tensor
         visual_hull = front_vol & side_vol  # (B, H, W, D)
 
-        # down‑sample if requested
+        # down‑sample if step > 1
         if step > 1:
             visual_hull = visual_hull[:, ::step, ::step, ::step]
 
         return visual_hull
 
     def training_step(self, batch, batch_idx):
-        (left_image, right_image), points, _, voxels = batch
-        y_pred = self(left_image, right_image)
-        
-        self.compute_metrics(y_pred, voxels, "train")
-        return
+        (L, R), _, _, voxels = batch
+        y_pred = self(L, R)
+        self.log_train_metrics(y_pred, voxels)
 
     def validation_step(self, batch, batch_idx):
-        (left_image, right_image), points, rotations, voxels = batch
-        y_pred = self(left_image, right_image)
-        
-        self.compute_metrics(y_pred, voxels, "val")
-        return
+        (L, R), _, _, voxels = batch
+        y_pred = self(L, R)
+        self.log_val_metrics(y_pred, voxels)
 
     def configure_optimizers(self):
         # return None to indicate no optimization is needed for this baseline
         return None
-    
-    def on_train_epoch_end(self):
-        self.finalize_metrics("train")
-
-    def on_validation_epoch_end(self):
-        self.finalize_metrics("val")

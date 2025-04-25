@@ -14,6 +14,7 @@ from hydra.utils import instantiate
 from pytorch_lightning.loggers import WandbLogger
 import hydra
 import statistics
+import numpy as np
 
 from metrics import init_metrics
 
@@ -58,32 +59,17 @@ def train_fold(
 
     # training
     trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
+    train_results = trainer.callback_metrics
 
-    val_results_list = trainer.validate(model, datamodule=datamodule)
+    val_results = trainer.validate(model, datamodule=datamodule)[0]
 
-    if not val_results_list:          # safety check, shouldn’t happen
-        val_results = {}
-    elif len(val_results_list) == 1:  # the common case: one val dataloader
-        val_results = val_results_list[0]
-    else:                             # >1 dataloader – merge the dicts
-        val_results = {}
-        for d, dl_dict in enumerate(val_results_list):
-            for k, v in dl_dict.items():
-                val_results[f"dl{d}/{k}"] = v
-    # cleanup
     torch.cuda.empty_cache()
     gc.collect()
     
-    return val_results
+    return val_results 
 
-def run_cv(cfg: DictConfig) -> Dict[str, float]:
-    """
-    Orchestrate the entire CV experiment in one W&B run.
-    """
-    # flatten config once
+def run_cv(cfg: DictConfig) -> None:
     flat_cfg = OmegaConf.to_container(cfg, resolve=True)
-
-    # single W&B run for all folds
     wandb_logger = WandbLogger(
         project="reconstruction",
         name=cfg.experiment.name,
@@ -91,59 +77,40 @@ def run_cv(cfg: DictConfig) -> Dict[str, float]:
         reinit=False,
     )
     run = wandb_logger.experiment
-    # plot all fold_* metrics vs epoch
     run.define_metric("fold_*", step_metric="epoch")
 
-    all_fold_metrics: List[Dict[str, float]] = []
+    # For each metric name (e.g. "val/iou") collect a list of fold-values
+    metrics_across_folds: Dict[str, list[float]] = defaultdict(list)
+
     for fold in range(cfg.data.n_splits):
         logger.info(f"Starting fold {fold}")
-        fold_metrics = train_fold(cfg, fold, wandb_logger)
-        all_fold_metrics.append(fold_metrics)
+        # train_fold should return the final logged val metrics dict
+        fold_val_logs = train_fold(cfg, fold, wandb_logger)
+        # fold_val_logs might look like {"fold_0/val/iou": 0.73, "fold_0/val/cd": …}
 
-        # log fold metrics, formatting only numeric values
-        entries: List[str] = []
-        for k, v in fold_metrics.items():
-            if isinstance(v, (int, float)):
-                entries.append(f"{k}={v:.4f}")
-            else:
-                entries.append(f"{k}={v}")
-        logger.info(f"Fold {fold} metrics: " + ", ".join(entries))
+        # strip off the "fold_{i}/" so we end up with "val/iou", "val/cd", …
+        for key, value in fold_val_logs.items():
+            short = "/".join(key.split("/")[1:])  # "val/iou"
+            metrics_across_folds[short].append(value)
 
-    
-    metric_buckets: defaultdict[str, list] = defaultdict(list)
-    rx = re.compile(r"(?:dl\d+/)?fold_\d+/(.*)")   # capture metric suffix
+        logger.info(f"Fold {fold} metrics: {fold_val_logs}")
 
-    for fold_dict in all_fold_metrics:
-        for k, v in fold_dict.items():
-            m = rx.match(k)
-            metric_name = m.group(1) if m else k       # fallback: keep key
-            metric_buckets[metric_name].append(v)
+    summary: Dict[str, float] = {}
+    for metric_name, values in metrics_across_folds.items():
+        arr = np.array(values, dtype=float)
+        mean, std = arr.mean(), arr.std(ddof=1)
+        summary[f"{metric_name}_mean"] = mean
+        summary[f"{metric_name}_std"]  = std
+        # log into W&B summary
+        run.summary[f"{metric_name}_mean"] = mean
+        run.summary[f"{metric_name}_std"]  = std
 
-    summary_metrics: Dict[str, float] = {}
-    for metric_name, values in metric_buckets.items():
-        nums = [v for v in values if isinstance(v, (int, float))]
-        if not nums:
-            continue
-
-        mean_val = statistics.mean(nums)
-        std_val  = statistics.stdev(nums) if len(nums) > 1 else 0.0
-
-        safe = metric_name.replace('/', '_')
-        summary_metrics[f"cv/mean_{safe}"] = mean_val
-        summary_metrics[f"cv/std_{safe}"]  = std_val
-
-    # log summary to W&B run
-    for k, v in summary_metrics.items():
-        run.summary[k] = v
-
+    logger.info(f"CV Summary: {summary}")
     run.finish()
-    return summary_metrics
 
 @hydra.main(config_path=str(CONFIG_ROOT), config_name="train", version_base="1.3")
 def main(cfg: DictConfig):
-    summary = run_cv(cfg)
-    logger.info(f"CV Summary: {summary}")
-    return summary
+    run_cv(cfg)
 
 if __name__ == "__main__":  
     main()
