@@ -1,6 +1,5 @@
 *.cmd
 *.exe
-**/models*
 */__pycache__*
 */.vscode*
 .vscode/
@@ -19,9 +18,21 @@ __pycache__/
 .env
 *.log
 /data/raw/*.stl
-/data/processed/*.stl
-/data/processed/**/*.png
-
+/data/processed/*
+/data/*.obj
+/data/*.mtl
+/data/*.png
+/data/*.jpg
+/data/*.jpeg
+/data/*.vsi
 **.stl
+**.npz
+*/.jupyter_cache
+
+lightning_logs/
+wandb/
+*.ckpt
+
+**/outputs
 
 .DS_Store
