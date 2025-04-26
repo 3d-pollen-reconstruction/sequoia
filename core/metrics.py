@@ -30,7 +30,6 @@ class IoU3D(Metric):
         super().__init__(dist_sync_on_step=dist_sync_on_step)
         self.threshold = threshold
 
-        # States to accumulate intersections and unions
         self.add_state("intersection", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("union", default=torch.tensor(0.0), dist_reduce_fx="sum")
 
@@ -43,31 +42,25 @@ class IoU3D(Metric):
                                   with values in [0, 1].
             target (torch.Tensor): Ground truth of same shape, binary values {0,1}.
         """
-        # Ensure shapes match
         if preds.shape != target.shape:
             raise ValueError(
                 f"Prediction and target must have the same shape, got {preds.shape} and {target.shape}."
             )
 
-        # Squeeze channel dimension if present
         if preds.ndim == 5 and preds.size(1) == 1:
             preds = preds.squeeze(1)
             target = target.squeeze(1)
 
-        # Binarize predictions
         preds_bin = preds > self.threshold
         target_bin = target.bool()
 
-        # Flatten spatial dimensions
         batch_size = preds_bin.size(0)
         preds_flat = preds_bin.view(batch_size, -1)
         target_flat = target_bin.view(batch_size, -1)
 
-        # Compute per-sample intersection and union
         intersection = (preds_flat & target_flat).sum(dim=1).float()
         union = (preds_flat | target_flat).sum(dim=1).float()
 
-        # Update states
         self.intersection += intersection.sum()
         self.union += union.sum()
 
@@ -78,7 +71,7 @@ class IoU3D(Metric):
         Returns:
             torch.Tensor: The overall 3D IoU.
         """
-        if self.union == 0: # if both intersection and union are 0
+        if self.union == 0:
             return torch.tensor(1.0, device=self.intersection.device)
         return self.intersection / self.union
 

@@ -1,6 +1,4 @@
-# models/visual_hull.py
 import torch
-import numpy as np
 import lightning.pytorch as pl
 
 from core.metrics import MetricsMixin
@@ -23,8 +21,6 @@ class VisualHull(MetricsMixin, pl.LightningModule):
         side_bin  = (side_tensor  > 0).squeeze(1)  # (B, H, D)
 
         # broadcast to full 3D volumes
-        #    front_vol[b,i,j,k] = front_bin[b,i,j]
-        #    side_vol [b,i,j,k] = side_bin [b,i,k]
         front_vol = front_bin.unsqueeze(3).expand(-1, -1, -1, D)  # (B, H, W, D)
         side_vol  = side_bin.unsqueeze(2).expand(-1, -1, W, -1)   # (B, H, W, D)
 

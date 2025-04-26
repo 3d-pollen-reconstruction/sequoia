@@ -1,11 +1,10 @@
 import gc
 import sys
 import os
-import re
 import logging
 import rootutils
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict
 import torch
 import lightning.pytorch as pl
 import lightning as L
@@ -13,7 +12,6 @@ from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from pytorch_lightning.loggers import WandbLogger
 import hydra
-import statistics
 import numpy as np
 
 from metrics import init_metrics
@@ -39,25 +37,21 @@ def train_fold(
     if cfg.get("seed"):
         pl.seed_everything(cfg.seed, workers=True)
 
-    # prepare data for this fold
     cfg.data.fold_idx = fold
     datamodule = instantiate(cfg.data)
     datamodule.setup("fit")
 
-    # instantiate model and metrics
     model = instantiate(cfg.model)
     model.fold = fold
     init_metrics(model, "train")
     init_metrics(model, "val")
 
-    # trainer reuses shared W&B logger
     trainer: pl.Trainer = instantiate(
         cfg.trainer,
         logger=wandb_logger,
         callbacks=instantiate(cfg.get("callbacks")),
     )
-
-    # training
+    
     trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
     train_results = trainer.callback_metrics
 
@@ -79,18 +73,15 @@ def run_cv(cfg: DictConfig) -> None:
     run = wandb_logger.experiment
     run.define_metric("fold_*", step_metric="epoch")
 
-    # For each metric name (e.g. "val/iou") collect a list of fold-values
     metrics_across_folds: Dict[str, list[float]] = defaultdict(list)
 
     for fold in range(cfg.data.n_splits):
         logger.info(f"Starting fold {fold}")
-        # train_fold should return the final logged val metrics dict
+        
         fold_val_logs = train_fold(cfg, fold, wandb_logger)
-        # fold_val_logs might look like {"fold_0/val/iou": 0.73, "fold_0/val/cd": …}
-
-        # strip off the "fold_{i}/" so we end up with "val/iou", "val/cd", …
+        
         for key, value in fold_val_logs.items():
-            short = "/".join(key.split("/")[1:])  # "val/iou"
+            short = "/".join(key.split("/")[1:])
             metrics_across_folds[short].append(value)
 
         logger.info(f"Fold {fold} metrics: {fold_val_logs}")
@@ -101,7 +92,7 @@ def run_cv(cfg: DictConfig) -> None:
         mean, std = arr.mean(), arr.std(ddof=1)
         summary[f"{metric_name}_mean"] = mean
         summary[f"{metric_name}_std"]  = std
-        # log into W&B summary
+        
         run.summary[f"{metric_name}_mean"] = mean
         run.summary[f"{metric_name}_std"]  = std
 
