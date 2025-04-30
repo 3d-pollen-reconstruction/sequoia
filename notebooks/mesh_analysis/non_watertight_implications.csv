@@ -1,7 +1,0 @@
-Operation,Works with non-watertight models
-Volume calculation,No - Volume not defined
-3D printing without post-processing,No - Printing problems likely
-Automatic mesh smoothing,Partially - Results unreliable
-Physical simulations,No - Physics requires closed volumes
-Automatic retopology,Partially - Poor results likely
-Watertightness required for successful operation,Yes

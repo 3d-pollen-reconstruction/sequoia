@@ -1,1 +1,0 @@
-from .visual_hull import VisualHull
