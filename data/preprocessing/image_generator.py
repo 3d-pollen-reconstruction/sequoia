@@ -257,12 +257,12 @@ class ImageGenerator:
                 sample_name = os.path.splitext(file)[0]
                 image_filename = f"{sample_name}.png"
                 image_path = os.path.join(images_dir, image_filename)
-                
+
                 os.makedirs(os.path.join(images_dir, "metadata"), exist_ok=True)
                 meta_path = os.path.join(images_dir, "metadata", f"{sample_name}_cam.json")
                 with open(meta_path, "w") as jf:
                     json.dump(meta, jf, indent=2)
-                                
+
                 try:
                     Image.fromarray(np.uint8(concatenated)).save(image_path)
                 except Exception as e:
@@ -270,7 +270,7 @@ class ImageGenerator:
                     continue
 
                 rotations_dict[sample_name] = rotation
-        
+
             try:
                 with open(csv_path, "w", newline="") as csvfile:
                     writer = csv.writer(csvfile)
