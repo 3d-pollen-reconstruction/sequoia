@@ -2,7 +2,7 @@ import logging
 import os
 import csv
 import json
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 from tqdm import tqdm
 import numpy as np
@@ -13,272 +13,257 @@ from vtk.util.numpy_support import vtk_to_numpy
 logger = logging.getLogger(__name__)
 
 class ImageGenerator:
-    def __init__(self, raw_mesh_dir: str = 'raw', output_dir: str = 'processed', random_seed: int = 1337):
+    def __init__(
+        self,
+        raw_mesh_dir: str = 'raw',
+        output_dir: str = 'processed',
+        random_seed: int = 1337,
+        view_angle: float = 30.0
+    ):
+        """
+        Initializes the generator with fixed perspective FOV so all meshes share identical intrinsics.
+        """
         self.raw_mesh_dir = raw_mesh_dir
         self.output_dir = output_dir
         self.random_seed = random_seed
+        self.view_angle = view_angle
         self.data_dir = os.getenv("DATA_DIR_PATH")
         if not self.data_dir:
             raise EnvironmentError("DATA_DIR_PATH environment variable not set.")
-        
+
     def _vtk4x4_to_numpy(self, mat: vtk.vtkMatrix4x4) -> np.ndarray:
         return np.array([[mat.GetElement(r, c) for c in range(4)] for r in range(4)])
 
-    def _camera_dict(self, cam: vtk.vtkCamera, renderer: vtk.vtkRenderer) -> dict:
-        # --- model‑view --------------------------------------------------------
-        mv_vtk = cam.GetModelViewTransformMatrix()              # ★ no arg
-        mv_np  = self._vtk4x4_to_numpy(mv_vtk)                       # ★
-
-        # --- projection -------------------------------------------------------
+    def _camera_dict(
+        self, cam: vtk.vtkCamera, renderer: vtk.vtkRenderer
+    ) -> dict:
+        """
+        Records camera intrinsics & extrinsics into a JSON-serializable dict.
+        """
+        mv = self._vtk4x4_to_numpy(cam.GetModelViewTransformMatrix())
         near_, far_ = cam.GetClippingRange()
-        aspect      = renderer.GetAspect()[0]                   # renderer’s X/Y
-        proj_vtk = cam.GetProjectionTransformMatrix(aspect, near_, far_)  # ★ no out‑mat
-        proj_np  = self._vtk4x4_to_numpy(proj_vtk)                   # ★
-
+        aspect = renderer.GetAspect()[0]
+        proj = self._vtk4x4_to_numpy(cam.GetProjectionTransformMatrix(aspect, near_, far_))
         return {
-            "position"        : cam.GetPosition(),
-            "focal_point"     : cam.GetFocalPoint(),
-            "view_up"         : cam.GetViewUp(),
-            "parallel_scale"  : cam.GetParallelScale(),
-            "clipping_range"  : [near_, far_],
-            "modelview"       : mv_np.tolist(),
-            "projection"      : proj_np.tolist(),
-            "proj_modelview"  : (proj_np @ mv_np).tolist()
+            "position": cam.GetPosition(),
+            "focal_point": cam.GetFocalPoint(),
+            "view_up": cam.GetViewUp(),
+            "clipping_range": [near_, far_],
+            "modelview": mv.tolist(),
+            "projection": proj.tolist(),
+            "proj_modelview": (proj @ mv).tolist()
         }
 
-    def _smooth_mesh(self, reader: vtk.vtkSTLReader, smoothing_iterations: int = 30, relaxation_factor: float = 0.1) -> vtk.vtkSmoothPolyDataFilter:
+    def _smooth_mesh(
+        self,
+        reader: vtk.vtkSTLReader,
+        smoothing_iterations: int = 30,
+        relaxation_factor: float = 0.1
+    ) -> vtk.vtkSmoothPolyDataFilter:
         """
-        Smooths a mesh using VTK's vtkSmoothPolyDataFilter.
+        Applies Laplacian smoothing. Raises if no valid input polydata.
         """
-        smooth_filter = vtk.vtkSmoothPolyDataFilter()
-        smooth_filter.SetInputConnection(reader.GetOutputPort())
-        smooth_filter.SetNumberOfIterations(smoothing_iterations)
-        smooth_filter.SetRelaxationFactor(relaxation_factor)
-        smooth_filter.FeatureEdgeSmoothingOff()
-        smooth_filter.BoundarySmoothingOff()
-        smooth_filter.Update()
-        return smooth_filter
+        poly = reader.GetOutput()
+        if poly is None or poly.GetNumberOfPoints() == 0:
+            raise RuntimeError("Mesh has no points to smooth.")
+        smoother = vtk.vtkSmoothPolyDataFilter()
+        smoother.SetInputConnection(reader.GetOutputPort())
+        smoother.SetNumberOfIterations(smoothing_iterations)
+        smoother.SetRelaxationFactor(relaxation_factor)
+        smoother.FeatureEdgeSmoothingOff()
+        smoother.BoundarySmoothingOff()
+        smoother.Update()
+        return smoother
 
     def _setup_renderers(
-            self, actor1: vtk.vtkActor, actor2: vtk.vtkActor,
-            center: Tuple[float, float, float], distance: float, max_dim: float
-        ) -> Tuple[Tuple[vtk.vtkRenderer, dict], Tuple[vtk.vtkRenderer, dict]]:
+        self,
+        actor1: vtk.vtkActor,
+        actor2: vtk.vtkActor,
+        center: Tuple[float, float, float],
+        distance: float,
+        max_dim: float
+    ) -> Tuple[Tuple[vtk.vtkRenderer, dict], Tuple[vtk.vtkRenderer, dict]]:
+        """
+        Creates two side-by-side renderers with fixed-view perspective cameras.
+        """
+        # common background
+        r1, r2 = vtk.vtkRenderer(), vtk.vtkRenderer()
+        for r, vp in [(r1, (0,0,0.5,1)), (r2, (0.5,0,1,1))]:
+            r.SetViewport(*vp)
+            r.SetBackground(0,0,0)
+            r.AddActor(actor1 if r is r1 else actor2)
 
-        renderer1, renderer2 = vtk.vtkRenderer(), vtk.vtkRenderer()
-        renderer1.SetViewport(0.0, 0.0, 0.5, 1.0)
-        renderer2.SetViewport(0.5, 0.0, 1.0, 1.0)
-        for r in (renderer1, renderer2):
-            r.SetBackground(0, 0, 0)
-
-        renderer1.AddActor(actor1)
-        renderer2.AddActor(actor2)
-
-        scale = max_dim * 0.6
-
-        # -------- camera 1 (front) ------------------------------------------
+        # perspective front
         cam1 = vtk.vtkCamera()
         cam1.SetFocalPoint(center)
         cam1.SetPosition(center[0], center[1], center[2] + distance)
-        cam1.SetViewUp(0, 1, 0)
-        cam1.ParallelProjectionOn()
-        cam1.SetParallelScale(scale)
+        cam1.SetViewUp(0,1,0)
+        cam1.ParallelProjectionOff()
+        cam1.SetViewAngle(self.view_angle)
+        r1.SetActiveCamera(cam1)
 
-        renderer1.SetActiveCamera(cam1)    # no ResetCamera()
-
-        # -------- camera 2 (side) -------------------------------------------
+        # perspective side
         cam2 = vtk.vtkCamera()
         cam2.SetFocalPoint(center)
         cam2.SetPosition(center[0] + distance, center[1], center[2])
-        cam2.SetViewUp(0, 1, 0)
-        cam2.ParallelProjectionOn()
-        cam2.SetParallelScale(scale)
+        cam2.SetViewUp(0,1,0)
+        cam2.ParallelProjectionOff()
+        cam2.SetViewAngle(self.view_angle)
+        r2.SetActiveCamera(cam2)
 
-        renderer2.SetActiveCamera(cam2)
-
-
-        # --------------------------- shared light ------------------------------
+        # shared light
         light = vtk.vtkLight()
         light.SetLightTypeToSceneLight()
-        light.SetPosition(1, 1, 1)
-        light.SetFocalPoint(0, 0, 0)
-        light.SetColor(1, 1, 1)
+        light.SetPosition(1,1,1)
         light.SetIntensity(1.0)
-        renderer1.AddLight(light)
-        renderer2.AddLight(light)
+        r1.AddLight(light)
+        r2.AddLight(light)
 
-        # return renderers and camera dictionaries
-        return (
-            (renderer1, self._camera_dict(cam1, renderer1)),
-            (renderer2, self._camera_dict(cam2, renderer2))
-        )
+        return ( (r1, self._camera_dict(cam1, r1)),
+                 (r2, self._camera_dict(cam2, r2)) )
 
     def _render_orthogonal_views(
-        self, mesh_file_path: str, rotation: Tuple[float, float, float] = (0, 0, 0)
+        self,
+        mesh_file_path: str,
+        rotation: Tuple[float, float, float] = (0, 0, 0)
     ) -> Tuple[np.ndarray, np.ndarray, dict]:
         """
-        Renders two orthogonal views of a mesh file.
-        Returns two numpy arrays for the left and right views.
+        Loads a mesh, smooths it, and renders two 90° apart perspective images.
+        Returns gray numpy arrays and metadata.
         """
         if not os.path.exists(mesh_file_path):
-            raise FileNotFoundError(f"Mesh file not found: {mesh_file_path}")
+            raise FileNotFoundError(f"Mesh not found: {mesh_file_path}")
 
+        # read STL robustly
         reader = vtk.vtkSTLReader()
         reader.SetFileName(mesh_file_path)
         reader.Update()
+        poly = reader.GetOutput()
+        if poly is None or poly.GetNumberOfPoints() == 0:
+            # skip invalid mesh
+            logger.error(f"Invalid or empty STL: {mesh_file_path}")
+            raise RuntimeError("Empty mesh, skipping render.")
 
-        smooth_filter = self._smooth_mesh(reader)
+        # smooth mesh
+        smoother = self._smooth_mesh(reader)
 
+        # mapper & actors
         mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputConnection(smooth_filter.GetOutputPort())
-
-        actor1 = vtk.vtkActor()
-        actor1.SetMapper(mapper)
-        actor2 = vtk.vtkActor()
-        actor2.SetMapper(mapper)
-        for actor in (actor1, actor2):
-            actor.GetProperty().SetColor(1, 1, 1)
+        mapper.SetInputConnection(smoother.GetOutputPort())
+        actors = []
+        for m in (mapper, mapper):
+            actor = vtk.vtkActor()
+            actor.SetMapper(m)
+            actor.GetProperty().SetColor(1,1,1)
             actor.GetProperty().SetAmbient(0.3)
             actor.GetProperty().SetDiffuse(0.7)
             actor.GetProperty().SetSpecular(0.5)
             actor.GetProperty().SetSpecularPower(50)
+            actors.append(actor)
 
-        # Center and compute view distance
-        polydata = smooth_filter.GetOutput()
-        bounds = polydata.GetBounds()  # (xmin, xmax, ymin, ymax, zmin, zmax)
-        center = polydata.GetCenter()
+        # compute view parameters
+        bounds = smoother.GetOutput().GetBounds()
+        center = smoother.GetOutput().GetCenter()
         max_dim = max(bounds[1]-bounds[0], bounds[3]-bounds[2], bounds[5]-bounds[4])
-        distance = max_dim * 2.5 if max_dim > 0 else 100
+        distance = max_dim * 2.5 if max_dim>0 else 100
 
-        # Apply rotation and set actor origins
-        for actor in (actor1, actor2):
+        for actor in actors:
             actor.SetOrigin(center)
             actor.SetOrientation(rotation)
 
-        (renderer1, cam1_dict), (renderer2, cam2_dict) = self._setup_renderers(actor1, actor2, center, distance, max_dim)
+        (r1_data, r2_data) = self._setup_renderers(
+            actors[0], actors[1], center, distance, max_dim
+        )
+        r1, cam1_meta = r1_data
+        r2, cam2_meta = r2_data
 
-        # Setup offscreen render window
-        render_window = vtk.vtkRenderWindow()
-        render_window.SetSize(2048, 1024)
-        render_window.SetOffScreenRendering(1)
-        render_window.AddRenderer(renderer1)
-        render_window.AddRenderer(renderer2)
-        renderer1.ResetCameraClippingRange()
-        renderer2.ResetCameraClippingRange()
-        render_window.Render()
+        # offscreen render
+        rw = vtk.vtkRenderWindow()
+        rw.SetOffScreenRendering(1)
+        rw.SetSize(2048,1024)
+        rw.AddRenderer(r1)
+        rw.AddRenderer(r2)
+        r1.ResetCameraClippingRange()
+        r2.ResetCameraClippingRange()
+        rw.Render()
 
-        # Capture the image
-        w2if = vtk.vtkWindowToImageFilter()
-        w2if.SetInput(render_window)
-        w2if.Update()
-        vtk_image = w2if.GetOutput()
-        dims = vtk_image.GetDimensions()
-        num_comp = vtk_image.GetPointData().GetScalars().GetNumberOfComponents()
-        vtk_array = vtk_to_numpy(vtk_image.GetPointData().GetScalars())
-        height, width = dims[1], dims[0]
-        arr = vtk_array.reshape(height, width, num_comp)
-        arr = np.flipud(arr)
+        # capture
+        w2i = vtk.vtkWindowToImageFilter()
+        w2i.SetInput(rw)
+        w2i.Update()
+        img = w2i.GetOutput()
+        arr = vtk_to_numpy(img.GetPointData().GetScalars())
+        h,w,_ = img.GetDimensions()[1], img.GetDimensions()[0], img.GetPointData().GetScalars().GetNumberOfComponents()
+        arr = arr.reshape(h, w, -1)[::-1]  # flip y
+        gray = np.array(Image.fromarray(arr.astype(np.uint8)).convert("L"))
 
-        gray_image = Image.fromarray(arr.astype(np.uint8)).convert("L")
-        arr = np.array(gray_image)
+        half = gray.shape[1]//2
+        left, right = gray[:, :half], gray[:, half:]
 
-        half_width = width // 2
-        left_view = arr[:, :half_width]
-        right_view = arr[:, half_width:]
-        
         meta = {
-            "rotation_deg"  : list(rotation),
-            "center"        : list(center),
-            "distance"      : distance,
-            "image_height"  : height,          # == half of render window's height
-            "image_width"   : half_width,      # whole window / 2
-            "camera_front"  : cam1_dict,
-            "camera_side"   : cam2_dict
+            "rotation_deg": list(rotation),
+            "center": list(center),
+            "distance": distance,
+            "image_height": gray.shape[0],
+            "image_width": half,
+            "camera_front": cam1_meta,
+            "camera_side": cam2_meta
         }
-        return left_view, right_view, meta
+        return left, right, meta
 
-
-    def _concatenate_images(self, left_view: np.ndarray, right_view: np.ndarray) -> np.ndarray:
-        """
-        Concatenates left and right views horizontally.
-        """
-        return np.concatenate((left_view, right_view), axis=1)
+    def _concatenate_images(self, left: np.ndarray, right: np.ndarray) -> np.ndarray:
+        return np.concatenate((left, right), axis=1)
 
     def _get_missing_files(self, files: List[str]) -> List[str]:
-        """
-        Determines which meshes (by base name) do not have corresponding images.
-        Returns a list of missing mesh filenames with a .stl extension.
-        """
+        """Lists which meshes don't yet have rendered images."""
         images_dir = os.path.join(self.data_dir, self.output_dir, "images")
-        if os.path.exists(images_dir):
-            folder_files = os.listdir(images_dir)
-        else:
-            folder_files = []
-        folder_base_names = {os.path.splitext(f)[0] for f in folder_files}
-        base_names = {os.path.splitext(f)[0] for f in files}
-        missing_base_names = base_names - folder_base_names
-        return [f"{base}.stl" for base in missing_base_names]
+        os.makedirs(images_dir, exist_ok=True)
+        existing = {os.path.splitext(f)[0] for f in os.listdir(images_dir)}
+        return [f for f in files if os.path.splitext(f)[0] not in existing]
 
     def process(self, files: List[str]) -> None:
         """
-        For each missing mesh file, generate a concatenated image of two orthogonal views.
-        Also, update the rotation records in a CSV file so that only new images get a new rotation
-        and any outdated rotations for missing images are replaced.
+        Render missing meshes and write out images + camera metadata.
+        Skips invalid meshes without halting the pipeline.
         """
         np.random.seed(self.random_seed)
-        
         images_dir = os.path.join(self.data_dir, self.output_dir, "images")
         os.makedirs(images_dir, exist_ok=True)
-
         csv_path = os.path.join(self.data_dir, self.output_dir, "rotations.csv")
-        rotations_dict = {}
+
+        # load existing rotations
+        rotations = {}
         if os.path.exists(csv_path):
+            with open(csv_path, newline='') as cf:
+                for row in csv.DictReader(cf):
+                    rotations[row['sample']] = (
+                        float(row['rot_x']), float(row['rot_y']), float(row['rot_z'])
+                    )
+
+        missing = self._get_missing_files(files)
+        for fname in tqdm(missing, desc="Rendering orthogonal views"):
+            mesh_path = os.path.join(self.data_dir, "processed", "interim", fname)
+            rot = tuple(np.random.uniform(0,360,3))
             try:
-                with open(csv_path, "r", newline="") as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
-                        sample = row["sample"]
-                        rotations_dict[sample] = (float(row["rot_x"]), float(row["rot_y"]), float(row["rot_z"]))
+                left, right, meta = self._render_orthogonal_views(mesh_path, rot)
             except Exception as e:
-                logger.error(f"Failed to load existing rotation CSV file: {e}")
+                logger.error(f"Skipping mesh {fname}: {e}")
+                continue
 
-        missing_files = self._get_missing_files(files)
-        if missing_files:
-            logger.info(f"Found {len(missing_files)} out of {len(files)} files to generate images for.")
-            for file in tqdm(missing_files, desc="Generating orthogonal image pairs"):
-                mesh_path = os.path.join(self.data_dir, "processed", "interim", file)
-                rotation = tuple(np.random.uniform(0, 360, 3))
-                try:
-                    left_view, right_view, meta = self._render_orthogonal_views(mesh_path, rotation)
-                except Exception as e:
-                    logger.error(f"Failed to render images for {file}: {e}")
-                    continue
+            # save images
+            img = self._concatenate_images(left, right).astype(np.uint8)
+            sample = os.path.splitext(fname)[0]
+            Image.fromarray(img).save(os.path.join(images_dir, f"{sample}.png"))
+            os.makedirs(os.path.join(images_dir, "metadata"), exist_ok=True)
+            with open(os.path.join(images_dir, "metadata", f"{sample}_cam.json"), 'w') as j:
+                json.dump(meta, j, indent=2)
 
-                concatenated = self._concatenate_images(left_view, right_view)
-                sample_name = os.path.splitext(file)[0]
-                image_filename = f"{sample_name}.png"
-                image_path = os.path.join(images_dir, image_filename)
+            rotations[sample] = rot
 
-                os.makedirs(os.path.join(images_dir, "metadata"), exist_ok=True)
-                meta_path = os.path.join(images_dir, "metadata", f"{sample_name}_cam.json")
-                with open(meta_path, "w") as jf:
-                    json.dump(meta, jf, indent=2)
-
-                try:
-                    Image.fromarray(np.uint8(concatenated)).save(image_path)
-                except Exception as e:
-                    logger.error(f"Failed to save image for {file}: {e}")
-                    continue
-
-                rotations_dict[sample_name] = rotation
-
-            try:
-                with open(csv_path, "w", newline="") as csvfile:
-                    writer = csv.writer(csvfile)
-                    writer.writerow(["sample", "rot_x", "rot_y", "rot_z"])
-                    for sample, rotation in rotations_dict.items():
-                        writer.writerow([sample, rotation[0], rotation[1], rotation[2]])
-                logger.info(f"Rotation data saved to {csv_path}.")
-            except Exception as e:
-                logger.error(f"Failed to save rotation CSV file: {e}")
-        else:
-            logger.info("Images have already been generated.")
+        # write rotations CSV
+        with open(csv_path, 'w', newline='') as cf:
+            writer = csv.writer(cf)
+            writer.writerow(["sample","rot_x","rot_y","rot_z"])
+            for s,(x,y,z) in rotations.items():
+                writer.writerow([s,x,y,z])
+        logger.info("Image generation complete.")

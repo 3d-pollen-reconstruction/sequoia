@@ -57,9 +57,10 @@ class PollenDataset(Dataset):
             right_tensor = t(right_img).squeeze(0).to(torch.float32)
 
         # --- load point cloud ---
-        pc_name   = fname.replace(".png", ".npz")
-        pc_data   = np.load(os.path.join(self.pointclouds_path, pc_name))
-        points    = torch.from_numpy(pc_data["points"]).to(torch.float32).to(self.device)
+        pc_name   = fname.replace(".png", ".pt")
+        pc_data   = torch.load(os.path.join(self.pointclouds_path, pc_name))
+        points    = (pc_data["points"]).to(torch.float32).to(self.device)
+        normals   = (pc_data["normals"]).to(torch.float32).to(self.device)
 
         # --- load rotations ---
         sample_id = fname.split(".")[0]
@@ -74,7 +75,7 @@ class PollenDataset(Dataset):
         voxels           = torch.load(voxels_path)
         
 
-        return (left_tensor, right_tensor), points, rotations, voxels
+        return (left_tensor, right_tensor), (points, normals), rotations, voxels
 
 def get_train_test_split(test_ratio=0.2, seed=42, **kwargs):
     dataset = PollenDataset(**kwargs)
