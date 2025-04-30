@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8">
   <meta name="description" content="Sequoia reconstructs 3D pollen grain models from two orthogonal grayscale images.">
@@ -10,118 +10,125 @@
 
   <!-- Import model-viewer component -->
   <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
-
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-p3VwFfNAc/ve5yfG47I+5lq1DvMZCC8k3fqtl9E4i0RHnfeB8/aU4k3jzuVoA7i1Mhw/j1npUR3+VtK+RIT5IQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
   <!-- Styles and icons -->
   <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
   <link rel="stylesheet" href="./static/css/bulma.min.css">
-  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
   <link rel="stylesheet" href="./static/css/index.css">
 </head>
+
 <body>
 
-<nav class="navbar" role="navigation">
-  <div class="navbar-menu">
-    <div class="navbar-start" style="flex-grow: 1; justify-content: center;">
-      <a class="navbar-item" href="#">
-        <span class="icon"><i class="fas fa-home"></i></span>
-      </a>
-      <div class="navbar-item has-dropdown is-hoverable">
-        <a class="navbar-link">Resources</a>
-        <div class="navbar-dropdown">
-          <a class="navbar-item" href="#">Project Agreement</a>
-          <a class="navbar-item" href="#">Overleaf</a>
-          <a class="navbar-item" href="#">GitHub</a>
+  <nav class="navbar" role="navigation">
+    <div class="navbar-menu">
+      <div class="navbar-start" style="flex-grow: 1; justify-content: center;">
+        <a class="navbar-item" href="#">
+          <span class="icon"><i class="fas fa-home"></i></span>
+        </a>
+        <div class="navbar-item has-dropdown is-hoverable">
+          <a class="navbar-link">Resources</a>
+          <div class="navbar-dropdown">
+            <a class="navbar-item" href="#">Project Agreement</a>
+            <a class="navbar-item" href="#">Overleaf</a>
+            <a class="navbar-item" href="#">GitHub</a>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</nav>
+  </nav>
 
-<section class="hero">
-  <div class="hero-body">
-    <div class="container is-max-desktop">
-      <div class="columns is-centered">
-        <div class="column has-text-centered">
-          <h1 class="title is-1 publication-title">Sequoia: 3D Pollen Reconstruction</h1>
-          <div class="is-size-5 publication-authors">
-            <span class="author-block">Nils Fahrni<sup>1</sup>,</span>
-            <span class="author-block">Etienne Roulet<sup>1</sup></span>
-          </div>
-          <div class="is-size-5 publication-authors">
-            <span class="author-block"><sup>1</sup>FHNW School of Engineering</span>
-          </div>
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
           <div class="column has-text-centered">
-            <div class="publication-links">
-              <span class="link-block">
-                <a href="#" class="external-link button is-normal is-rounded is-dark">
-                  <span class="icon"><i class="fas fa-file-pdf"></i></span>
-                  <span>Report</span>
-                </a>
-              </span>
-              <span class="link-block">
-                <a href="#" class="external-link button is-normal is-rounded is-dark">
-                  <span class="icon"><i class="fab fa-github"></i></span>
-                  <span>Code</span>
-                </a>
-              </span>
-              <span class="link-block">
-                <a href="#" class="external-link button is-normal is-rounded is-dark">
-                  <span class="icon"><i class="far fa-images"></i></span>
-                  <span>Dataset</span>
-                </a>
-              </span>
+            <h1 class="title is-1 publication-title">Sequoia: 3D Pollen Reconstruction</h1>
+            <div class="is-size-5 publication-authors">
+              <span class="author-block">Nils Fahrni<sup>1</sup>,</span>
+              <span class="author-block">Etienne Roulet<sup>1</sup></span>
+            </div>
+            <div class="is-size-5 publication-authors">
+              <span class="author-block"><sup>1</sup>FHNW School of Engineering</span>
+            </div>
+            <div class="column has-text-centered">
+              <div class="publication-links">
+                <span class="link-block">
+                  <a href="#" class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon"><i class="fas fa-file-pdf"></i></span>
+                    <span>Report</span>
+                  </a>
+                </span>
+                <span class="link-block">
+                  <a href="#" class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon"><i class="fab fa-github"></i></span>
+                    <span>Code</span>
+                  </a>
+                </span>
+                <span class="link-block">
+                  <a href="#" class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon"><i class="far fa-images"></i></span>
+                    <span>Dataset</span>
+                  </a>
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="hero teaser">
-  <div class="container is-max-desktop">
-    <div class="hero-body">
-      <model-viewer src="./static/models/sample_pollen.glb" alt="3D Pollen Model" shadow-intensity="1" camera-controls auto-rotate></model-viewer>
-      <h2 class="subtitle has-text-centered">Reconstructed 3D model from two orthogonal views</h2>
+  <section class="hero teaser">
+    <div class="container is-max-desktop">
+      <div class="hero-body">
+        <model-viewer src="./static/models/RocketShip.glb"" alt=" 3D Pollen Model" shadow-intensity="1" camera-controls
+          auto-rotate></model-viewer>
+        <h2 class="subtitle has-text-centered">Reconstructed 3D model from two orthogonal views</h2>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="section">
-  <div class="container is-max-desktop">
-    <div class="columns is-centered has-text-centered">
-      <div class="column is-four-fifths">
-        <h2 class="title is-3">Abstract</h2>
-        <div class="content has-text-justified">
-          <p>This project explores how to reconstruct 3D pollen grain structures from only two orthogonal grayscale images, inspired by the image outputs of SwisensPoleno. We evaluate techniques such as Neural Radiance Fields (NeRF), Gaussian Splatting, and VAE-based 3D generation on synthetic and real-world datasets to determine their reconstruction capabilities in constrained scenarios.</p>
+  <section class="section">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+          <h2 class="title is-3">Abstract</h2>
+          <div class="content has-text-justified">
+            <p>This project explores how to reconstruct 3D pollen grain structures from only two orthogonal grayscale
+              images, inspired by the image outputs of SwisensPoleno. We evaluate techniques such as Neural Radiance
+              Fields (NeRF), Gaussian Splatting, and VAE-based 3D generation on synthetic and real-world datasets to
+              determine their reconstruction capabilities in constrained scenarios.</p>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="section">
-  <div class="container is-max-desktop">
-    <div class="columns is-centered">
-      <div class="column is-full-width">
-        <h2 class="title is-3">Interactive Models</h2>
-        <div class="content">
-          <model-viewer src="./static/models/model1.glb" alt="Model 1" camera-controls auto-rotate style="height: 400px;"></model-viewer>
-          <model-viewer src="./static/models/model2.glb" alt="Model 2" camera-controls auto-rotate style="height: 400px; margin-top: 2rem;"></model-viewer>
+  <section class="section">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column is-full-width">
+          <h2 class="title is-3">Interactive Models</h2>
+          <div class="content">
+            <model-viewer src="./static/models/RocketShip.glb" alt="Model 1" camera-controls auto-rotate
+              style="height: 400px;"></model-viewer>
+            <model-viewer src="./static/models/RocketShip.glb" alt="Model 2" camera-controls auto-rotate
+              style="height: 400px; margin-top: 2rem;"></model-viewer>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<footer class="footer">
-  <div class="content has-text-centered">
-    <p>
-      Website based on the Nerfies project template.<br>
-      Licensed under <a href="http://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.
-    </p>
-  </div>
-</footer>
+  <footer class="footer">
+    <div class="content has-text-centered">
+      <p>
+      </p>
+    </div>
+  </footer>
 
 </body>
+
 </html>
