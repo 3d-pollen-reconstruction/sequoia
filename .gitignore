@@ -36,3 +36,7 @@ wandb/
 **/outputs
 
 .DS_Store
+
+
+Vanilla_Nerf/*.txt
+Vanilla_Nerf/2D_Pollen/*
