@@ -1,18 +1,20 @@
+import gc
 import sys
 import os
-import gc
 import logging
-from typing import Optional
+import rootutils
+from collections import defaultdict
+from typing import Dict
+import torch
+import lightning.pytorch as pl
+import lightning as L
+from omegaconf import DictConfig, OmegaConf
+from hydra.utils import instantiate
+from pytorch_lightning.loggers import WandbLogger
+import hydra
+import numpy as np
 
 from metrics import init_metrics
-import hydra
-from omegaconf import OmegaConf
-import lightning as L
-import torch
-import rootutils
-from hydra.utils import instantiate
-from omegaconf import DictConfig
-from pytorch_lightning.loggers import WandbLogger
 
 sys.path.insert(0, os.getcwd())
 
@@ -24,99 +26,82 @@ CONFIG_ROOT = PROJECT_ROOT / "configs"
 
 logger = logging.getLogger(__name__)
 
-def train(cfg: DictConfig) -> None:
+def train_fold(
+    cfg: DictConfig,
+    fold: int,
+    wandb_logger: WandbLogger
+) -> Dict[str, float]:
     """
-    Main training function.
-
-    Args:
-        cfg: Hydra configuration object.
-
-    Returns:
-        Tuple of metrics dictionaries.
+    Run one fold: instantiate data, model, train, and return final metrics for that fold.
     """
     if cfg.get("seed"):
-        L.seed_everything(cfg.seed, workers=True)
+        pl.seed_everything(cfg.seed, workers=True)
 
-    logger.info(f"Instantiating datamodule <{cfg.data._target_}>")
+    cfg.data.fold_idx = fold
     datamodule = instantiate(cfg.data)
     datamodule.setup("fit")
 
-    logger.info(f"Instantiating model <{cfg.model._target_}>")
     model = instantiate(cfg.model)
-
+    model.fold = fold
     init_metrics(model, "train")
     init_metrics(model, "val")
-    
-    logger.info("Instantiating callbacks...")
-    callbacks = instantiate(cfg.get("callbacks"))
 
-    logger.info("Instantiating loggers...")
-    log_instances = instantiate(cfg.get("logger"))
-    
-    flat_cfg = OmegaConf.to_container(cfg, resolve=True)  
-    wandb_logger = WandbLogger(
-        project="reconstruction",
-        name=cfg.get("name"),
-        config=flat_cfg
+    trainer: pl.Trainer = instantiate(
+        cfg.trainer,
+        logger=wandb_logger,
+        callbacks=instantiate(cfg.get("callbacks")),
     )
-
-    logger.info(f"Instantiating trainer <{cfg.trainer._target_}>")
-    trainer = instantiate(cfg.trainer, logger=wandb_logger, callbacks=callbacks)
-
-    object_dict = {
-        "cfg": cfg,
-        "model": model,
-        "trainer": trainer,
-        "callbacks": callbacks,
-    }
-
-    if cfg.get("train"):
-        logger.info("Starting training!")
-        trainer.fit(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
-        logger.info("Training completed.")
     
-    train_metrics = trainer.callback_metrics
-    logger.info(f"Training metrics callback: {train_metrics}")
-    
-    if cfg.get("test"):
-        logger.info("Starting testing!")
-        ckpt_path = trainer.checkpoint_callback.best_model_path
-        if ckpt_path == "":
-            logger.warning("Best ckpt not found! Using current weights for testing...")
-            ckpt_path = None
-        logger.info(f"Loading best model from {ckpt_path} for testing...")
-        trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
-        logger.info("Testing completed.")
+    trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
+    train_results = trainer.callback_metrics
 
-    test_metrics = trainer.callback_metrics
+    val_results = trainer.validate(model, datamodule=datamodule)[0]
 
-    logger.info("Cleaning up...")
     torch.cuda.empty_cache()
     gc.collect()
+    
+    return val_results 
 
-    logger.info("Goodbye!")
+def run_cv(cfg: DictConfig) -> None:
+    flat_cfg = OmegaConf.to_container(cfg, resolve=True)
+    wandb_logger = WandbLogger(
+        project="reconstruction",
+        name=cfg.experiment.name,
+        config=flat_cfg,
+        reinit=False,
+    )
+    run = wandb_logger.experiment
+    run.define_metric("fold_*", step_metric="epoch")
 
-    return {**train_metrics, **test_metrics}, object_dict
-
-
-@hydra.main(config_path=str(CONFIG_ROOT), config_name="train", version_base="1.3")
-def main(cfg: DictConfig) -> Optional[float]:
-    fold_metrics = {}
+    metrics_across_folds: Dict[str, list[float]] = defaultdict(list)
 
     for fold in range(cfg.data.n_splits):
         logger.info(f"Starting fold {fold}")
-        cfg.data.fold_idx = fold
+        
+        fold_val_logs = train_fold(cfg, fold, wandb_logger)
+        
+        for key, value in fold_val_logs.items():
+            short = "/".join(key.split("/")[1:])
+            metrics_across_folds[short].append(value)
 
-        current_metrics, _ = train(cfg)
+        logger.info(f"Fold {fold} metrics: {fold_val_logs}")
 
-        for key, value in current_metrics.items():
-            fold_metrics.setdefault(key, []).append(value)
-        logger.info(f"Fold {fold} Metrics: {current_metrics}")
+    summary: Dict[str, float] = {}
+    for metric_name, values in metrics_across_folds.items():
+        arr = np.array(values, dtype=float)
+        mean, std = arr.mean(), arr.std(ddof=1)
+        summary[f"{metric_name}_mean"] = mean
+        summary[f"{metric_name}_std"]  = std
+        
+        run.summary[f"{metric_name}_mean"] = mean
+        run.summary[f"{metric_name}_std"]  = std
 
-    averaged_metrics = {key: sum(values)/len(values) for key, values in fold_metrics.items()}
-    logger.info(f"Averaged Metrics across {cfg.data.n_splits} folds: {averaged_metrics}")
+    logger.info(f"CV Summary: {summary}")
+    run.finish()
 
-    return averaged_metrics
+@hydra.main(config_path=str(CONFIG_ROOT), config_name="train", version_base="1.3")
+def main(cfg: DictConfig):
+    run_cv(cfg)
 
-if __name__ == "__main__":
+if __name__ == "__main__":  
     main()
