@@ -40,3 +40,6 @@ wandb/
 
 Vanilla_Nerf/*.txt
 Vanilla_Nerf/2D_Pollen/*
+Pixel_NeRF/*.txt
+Pixel_NeRF/pollen/*.png
+Pixel_NeRF/pollen/*.txt
