@@ -4,6 +4,11 @@ import os
 from tqdm import tqdm
 import fast_simplification
 import pyvista as pv
+import trimesh
+import numpy as np
+import pymeshlab
+import multiprocessing as mp
+mp.set_start_method('spawn', force=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,7 +36,10 @@ class MeshProcessor:
         if len(missing_files) != 0:
             logger.info(f"Found {len(missing_files)} of {len(files)} files to simplify.")
             for file in tqdm(missing_files, desc="Simplifying meshes"):
-                mesh = pv.read(os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir, file))
+                mesh = trimesh.load_mesh(os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir, "interim", file))
+
+                # turning the mesh into a pyvista mesh for simplification
+                mesh = pv.wrap(mesh)                
                 simplified_mesh = self._simplify_mesh(mesh)
                 
                 mesh_path = os.path.join(meshes_dir, file)
@@ -39,3 +47,9 @@ class MeshProcessor:
                 pv.save_meshio(mesh=simplified_mesh, filename=mesh_path)
         else:
             logger.info("Meshes have already been simplified.")
+            
+        interim_dir = os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir, "interim")
+        if os.path.exists(interim_dir):
+            for file in os.listdir(interim_dir):
+                os.remove(os.path.join(interim_dir, file))
+            os.rmdir(interim_dir)

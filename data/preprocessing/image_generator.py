@@ -1,5 +1,7 @@
 import logging
 import os
+import csv
+import json
 from typing import Tuple, List
 
 from tqdm import tqdm
@@ -18,6 +20,31 @@ class ImageGenerator:
         self.data_dir = os.getenv("DATA_DIR_PATH")
         if not self.data_dir:
             raise EnvironmentError("DATA_DIR_PATH environment variable not set.")
+        
+    def _vtk4x4_to_numpy(self, mat: vtk.vtkMatrix4x4) -> np.ndarray:
+        return np.array([[mat.GetElement(r, c) for c in range(4)] for r in range(4)])
+
+    def _camera_dict(self, cam: vtk.vtkCamera, renderer: vtk.vtkRenderer) -> dict:
+        # --- model‑view --------------------------------------------------------
+        mv_vtk = cam.GetModelViewTransformMatrix()              # ★ no arg
+        mv_np  = self._vtk4x4_to_numpy(mv_vtk)                       # ★
+
+        # --- projection -------------------------------------------------------
+        near_, far_ = cam.GetClippingRange()
+        aspect      = renderer.GetAspect()[0]                   # renderer’s X/Y
+        proj_vtk = cam.GetProjectionTransformMatrix(aspect, near_, far_)  # ★ no out‑mat
+        proj_np  = self._vtk4x4_to_numpy(proj_vtk)                   # ★
+
+        return {
+            "position"        : cam.GetPosition(),
+            "focal_point"     : cam.GetFocalPoint(),
+            "view_up"         : cam.GetViewUp(),
+            "parallel_scale"  : cam.GetParallelScale(),
+            "clipping_range"  : [near_, far_],
+            "modelview"       : mv_np.tolist(),
+            "projection"      : proj_np.tolist(),
+            "proj_modelview"  : (proj_np @ mv_np).tolist()
+        }
 
     def _smooth_mesh(self, reader: vtk.vtkSTLReader, smoothing_iterations: int = 30, relaxation_factor: float = 0.1) -> vtk.vtkSmoothPolyDataFilter:
         """
@@ -32,33 +59,44 @@ class ImageGenerator:
         smooth_filter.Update()
         return smooth_filter
 
-    def _setup_renderers(self, actor1: vtk.vtkActor, actor2: vtk.vtkActor, center: Tuple[float, float, float], distance: float) -> Tuple[vtk.vtkRenderer, vtk.vtkRenderer]:
-        """
-        Sets up two renderers for orthogonal views with cameras and shared lighting.
-        """
-        renderer1 = vtk.vtkRenderer()
-        renderer2 = vtk.vtkRenderer()
+    def _setup_renderers(
+            self, actor1: vtk.vtkActor, actor2: vtk.vtkActor,
+            center: Tuple[float, float, float], distance: float, max_dim: float
+        ) -> Tuple[Tuple[vtk.vtkRenderer, dict], Tuple[vtk.vtkRenderer, dict]]:
+
+        renderer1, renderer2 = vtk.vtkRenderer(), vtk.vtkRenderer()
         renderer1.SetViewport(0.0, 0.0, 0.5, 1.0)
         renderer2.SetViewport(0.5, 0.0, 1.0, 1.0)
-        renderer1.SetBackground(0, 0, 0)
-        renderer2.SetBackground(0, 0, 0)
+        for r in (renderer1, renderer2):
+            r.SetBackground(0, 0, 0)
+
         renderer1.AddActor(actor1)
         renderer2.AddActor(actor2)
 
-        # Setup cameras
-        camera1 = vtk.vtkCamera()
-        camera1.SetFocalPoint(center)
-        camera1.SetPosition(center[0], center[1], center[2] + distance)
-        camera1.SetViewUp(0, 1, 0)
-        renderer1.SetActiveCamera(camera1)
+        scale = max_dim * 0.6
 
-        camera2 = vtk.vtkCamera()
-        camera2.SetFocalPoint(center)
-        camera2.SetPosition(center[0] + distance, center[1], center[2])
-        camera2.SetViewUp(0, 1, 0)
-        renderer2.SetActiveCamera(camera2)
+        # -------- camera 1 (front) ------------------------------------------
+        cam1 = vtk.vtkCamera()
+        cam1.SetFocalPoint(center)
+        cam1.SetPosition(center[0], center[1], center[2] + distance)
+        cam1.SetViewUp(0, 1, 0)
+        cam1.ParallelProjectionOn()
+        cam1.SetParallelScale(scale)
 
-        # Add shared lighting
+        renderer1.SetActiveCamera(cam1)    # no ResetCamera()
+
+        # -------- camera 2 (side) -------------------------------------------
+        cam2 = vtk.vtkCamera()
+        cam2.SetFocalPoint(center)
+        cam2.SetPosition(center[0] + distance, center[1], center[2])
+        cam2.SetViewUp(0, 1, 0)
+        cam2.ParallelProjectionOn()
+        cam2.SetParallelScale(scale)
+
+        renderer2.SetActiveCamera(cam2)
+
+
+        # --------------------------- shared light ------------------------------
         light = vtk.vtkLight()
         light.SetLightTypeToSceneLight()
         light.SetPosition(1, 1, 1)
@@ -68,9 +106,15 @@ class ImageGenerator:
         renderer1.AddLight(light)
         renderer2.AddLight(light)
 
-        return renderer1, renderer2
+        # return renderers and camera dictionaries
+        return (
+            (renderer1, self._camera_dict(cam1, renderer1)),
+            (renderer2, self._camera_dict(cam2, renderer2))
+        )
 
-    def _render_orthogonal_views(self, mesh_file_path: str, rotation: Tuple[float, float, float] = (0, 0, 0)) -> Tuple[np.ndarray, np.ndarray]:
+    def _render_orthogonal_views(
+        self, mesh_file_path: str, rotation: Tuple[float, float, float] = (0, 0, 0)
+    ) -> Tuple[np.ndarray, np.ndarray, dict]:
         """
         Renders two orthogonal views of a mesh file.
         Returns two numpy arrays for the left and right views.
@@ -110,7 +154,7 @@ class ImageGenerator:
             actor.SetOrigin(center)
             actor.SetOrientation(rotation)
 
-        renderer1, renderer2 = self._setup_renderers(actor1, actor2, center, distance)
+        (renderer1, cam1_dict), (renderer2, cam2_dict) = self._setup_renderers(actor1, actor2, center, distance, max_dim)
 
         # Setup offscreen render window
         render_window = vtk.vtkRenderWindow()
@@ -140,7 +184,18 @@ class ImageGenerator:
         half_width = width // 2
         left_view = arr[:, :half_width]
         right_view = arr[:, half_width:]
-        return left_view, right_view
+        
+        meta = {
+            "rotation_deg"  : list(rotation),
+            "center"        : list(center),
+            "distance"      : distance,
+            "image_height"  : height,          # == half of render window's height
+            "image_width"   : half_width,      # whole window / 2
+            "camera_front"  : cam1_dict,
+            "camera_side"   : cam2_dict
+        }
+        return left_view, right_view, meta
+
 
     def _concatenate_images(self, left_view: np.ndarray, right_view: np.ndarray) -> np.ndarray:
         """
@@ -166,20 +221,34 @@ class ImageGenerator:
     def process(self, files: List[str]) -> None:
         """
         For each missing mesh file, generate a concatenated image of two orthogonal views.
+        Also, update the rotation records in a CSV file so that only new images get a new rotation
+        and any outdated rotations for missing images are replaced.
         """
         np.random.seed(self.random_seed)
         
         images_dir = os.path.join(self.data_dir, self.output_dir, "images")
         os.makedirs(images_dir, exist_ok=True)
 
+        csv_path = os.path.join(self.data_dir, self.output_dir, "rotations.csv")
+        rotations_dict = {}
+        if os.path.exists(csv_path):
+            try:
+                with open(csv_path, "r", newline="") as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        sample = row["sample"]
+                        rotations_dict[sample] = (float(row["rot_x"]), float(row["rot_y"]), float(row["rot_z"]))
+            except Exception as e:
+                logger.error(f"Failed to load existing rotation CSV file: {e}")
+
         missing_files = self._get_missing_files(files)
         if missing_files:
             logger.info(f"Found {len(missing_files)} out of {len(files)} files to generate images for.")
             for file in tqdm(missing_files, desc="Generating orthogonal image pairs"):
-                mesh_path = os.path.join(self.data_dir, self.raw_mesh_dir, file)
+                mesh_path = os.path.join(self.data_dir, "processed", "interim", file)
                 rotation = tuple(np.random.uniform(0, 360, 3))
                 try:
-                    left_view, right_view = self._render_orthogonal_views(mesh_path, rotation)
+                    left_view, right_view, meta = self._render_orthogonal_views(mesh_path, rotation)
                 except Exception as e:
                     logger.error(f"Failed to render images for {file}: {e}")
                     continue
@@ -188,9 +257,28 @@ class ImageGenerator:
                 sample_name = os.path.splitext(file)[0]
                 image_filename = f"{sample_name}.png"
                 image_path = os.path.join(images_dir, image_filename)
+                
+                os.makedirs(os.path.join(images_dir, "metadata"), exist_ok=True)
+                meta_path = os.path.join(images_dir, "metadata", f"{sample_name}_cam.json")
+                with open(meta_path, "w") as jf:
+                    json.dump(meta, jf, indent=2)
+                                
                 try:
                     Image.fromarray(np.uint8(concatenated)).save(image_path)
                 except Exception as e:
                     logger.error(f"Failed to save image for {file}: {e}")
+                    continue
+
+                rotations_dict[sample_name] = rotation
+        
+            try:
+                with open(csv_path, "w", newline="") as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(["sample", "rot_x", "rot_y", "rot_z"])
+                    for sample, rotation in rotations_dict.items():
+                        writer.writerow([sample, rotation[0], rotation[1], rotation[2]])
+                logger.info(f"Rotation data saved to {csv_path}.")
+            except Exception as e:
+                logger.error(f"Failed to save rotation CSV file: {e}")
         else:
             logger.info("Images have already been generated.")

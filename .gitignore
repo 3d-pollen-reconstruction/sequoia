@@ -1,6 +1,5 @@
 *.cmd
 *.exe
-**/models*
 */__pycache__*
 */.vscode*
 .vscode/
@@ -19,8 +18,7 @@ __pycache__/
 .env
 *.log
 /data/raw/*.stl
-/data/processed/*.stl
-/data/processed/**/*.png
+/data/processed/*
 /data/*.obj
 /data/*.mtl
 /data/*.png
@@ -28,5 +26,17 @@ __pycache__/
 /data/*.jpeg
 /data/*.vsi
 **.stl
+**.npz
+*/.jupyter_cache
+
+lightning_logs/
+wandb/
+*.ckpt
+
+**/outputs
 
 .DS_Store
+
+
+Vanilla_Nerf/*.txt
+Vanilla_Nerf/2D_Pollen/*

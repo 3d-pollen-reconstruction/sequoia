@@ -1,0 +1,18 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - model: visual_hull
+  - data: default
+  - trainer: default
+  - experiment: default
+
+ckpt_path: null
+
+task_name: "train"
+tags: ["dev"]
+
+train: True
+test: False
+
+seed: 1337
