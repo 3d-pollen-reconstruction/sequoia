@@ -57,10 +57,18 @@ class PollenDataset(Dataset):
             right_tensor = t(right_img).squeeze(0).to(torch.float32)
 
         # --- load point cloud ---
-        pc_name   = fname.replace(".png", ".pt")
-        pc_data   = torch.load(os.path.join(self.pointclouds_path, pc_name))
-        points    = (pc_data["points"]).to(torch.float32).to(self.device)
-        normals   = (pc_data["normals"]).to(torch.float32).to(self.device)
+        pc_name = fname.replace(".png", ".pt")
+        pc_data = torch.load(os.path.join(self.pointclouds_path, pc_name))
+        points  = pc_data["points"].to(torch.float32).to(self.device)   # (N,3)
+        normals = pc_data["normals"].to(torch.float32).to(self.device)  # (N,3)
+
+        # center & scale to unit radius
+        center = points.mean(dim=0, keepdim=True)       # (1,3)
+        points = points - center                        # zero-center
+        max_dist = points.norm(dim=1).max()             # largest radius
+        if max_dist > 0:
+            points = points / max_dist                  # now all ≤1
+
 
         # --- load rotations ---
         sample_id = fname.split(".")[0]

@@ -32,7 +32,10 @@ __pycache__/
 lightning_logs/
 wandb/
 *.ckpt
+*.tar
+*.pth
 
 **/outputs
 
 .DS_Store
+
