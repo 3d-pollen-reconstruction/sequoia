@@ -25,6 +25,8 @@ def get_split_dataset(dataset_type, datadir, want_split="all", training=True, **
     elif dataset_type == "multi_obj":
         # For multiple-object
         dset_class = MultiObjectDataset
+    elif dataset_type == "pollen":
+        dset_class = SRNDataset
     elif dataset_type.startswith("dvr"):
         # For ShapeNet 64x64
         dset_class = DVRDataset

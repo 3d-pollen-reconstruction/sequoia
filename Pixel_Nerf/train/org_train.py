@@ -1,17 +1,14 @@
+
 # Training to a set of multiple objects (e.g. ShapeNet or DTU)
 # tensorboard logs available in logs/<expname>
 
 import sys
 import os
-import matplotlib.pyplot as plt
-import imageio
-import multiprocessing
-from huggingface_hub import upload_folder
-import datetime
+
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
-from dotenv import load_dotenv
+
 import warnings
 import trainlib
 from model import make_model, loss
@@ -21,16 +18,8 @@ import util
 import numpy as np
 import torch.nn.functional as F
 import torch
-
-print("🚀 CUDA available:", torch.cuda.is_available())
-print("🧠 CUDA device count:", torch.cuda.device_count())
-print("📛 CUDA device name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "None")
-
-torch.autograd.set_detect_anomaly(True)
-
 from dotmap import DotMap
-warnings.filterwarnings('ignore', category=UserWarning)
-load_dotenv()  # loads .env into os.environ
+
 
 def extra_args(parser):
     parser.add_argument(
@@ -44,14 +33,15 @@ def extra_args(parser):
         help="Number of source views (multiview); put multiple (space delim) to pick randomly per batch ('NV')",
     )
     parser.add_argument(
-            "--gamma_delay", type=int, default=0,
-            help="Number of scheduler.step() calls to wait before applying gamma decay"
-    )
-    parser.add_argument(
         "--freeze_enc",
         action="store_true",
         default=None,
         help="Freeze encoder weights and only train MLP",
+    )
+    
+    parser.add_argument(
+            "--gamma_delay", type=int, default=0,
+            help="Number of scheduler.step() calls to wait before applying gamma decay"
     )
 
     parser.add_argument(
@@ -69,17 +59,15 @@ def extra_args(parser):
     return parser
 
 
-args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=256)
-
+args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
 device = util.get_cuda(args.gpu_id[0])
-print("Using device", device)
+
 dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )
 
 net = make_model(conf["model"]).to(device=device)
-print(conf["model"])
 net.stop_encoder_grad = args.freeze_enc
 if args.freeze_enc:
     print("Encoder frozen")
@@ -123,61 +111,14 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         self.z_near = dset.z_near
         self.z_far = dset.z_far
-        
 
         self.use_bbox = args.no_bbox_step > 0
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
-        
+
     def extra_save_state(self):
-        # Save renderer state as before
         torch.save(renderer.state_dict(), self.renderer_state_path)
-        """ print(f"Saved renderer state to {self.renderer_state_path}")
-        # Calculate current epoch based on _iter file and dataset size
-        try:
-            iter_path = os.path.join(self.args.checkpoints_path, self.args.name, "_iter")
-            state = torch.load(iter_path)
-            global_step = state.get("iter", 0)
-            epoch = global_step // self.num_total_batches
-            print(f"[HF Upload] Current epoch: {epoch}")
-        except Exception as e:
-            print(f"[HF Upload] Could not determine epoch from _iter: {e}")
-            return
-
-        # Upload every 30 epochs
-        if epoch % 50 != 0 or epoch == 0:
-            return
-
-        # Prevent duplicate uploads
-        last_uploaded_path = os.path.join(self.args.checkpoints_path, self.args.name, "_last_hf_upload.txt")
-        if os.path.exists(last_uploaded_path):
-            try:
-                with open(last_uploaded_path, "r") as f:
-                    last = int(f.read().strip())
-                    if last == epoch:
-                        return
-            except:
-                pass  # fallback: continue upload
-
-        # Perform upload
-        ckpt_dir = os.path.join(self.args.checkpoints_path, self.args.name)
-        print(f"[HF Upload] Uploading checkpoint for epoch {epoch} from {ckpt_dir}...")
-
-        try:
-            upload_folder(
-                folder_path=ckpt_dir,
-                repo_id="Etiiir/PixelNerf_Pollen",
-                repo_type="model",
-                commit_message=f"Upload at epoch {epoch}",
-                path_in_repo=f"checkpoints/epoch_{epoch}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                token=os.environ.get("HF_TOKEN", None),
-            )
-            with open(last_uploaded_path, "w") as f:
-                f.write(str(epoch))
-            print(f"[HF Upload] ✅ Epoch {epoch} uploaded.")
-        except Exception as e:
-            print(f"[HF Upload] ❌ Failed to upload: {e}") """
 
     def calc_losses(self, data, is_train=True, global_step=0):
         if "images" not in data:
@@ -399,50 +340,11 @@ class PixelNeRFTrainer(trainlib.Trainer):
         psnr = util.psnr(rgb_psnr, gt)
         vals = {"psnr": psnr}
         print("psnr", psnr)
-        
-        debug_outdir = os.path.join(self.args.checkpoints_path, self.args.name, "vis_debug")
-        os.makedirs(debug_outdir, exist_ok=True)
-
-        step_str = f"{global_step:06d}"
-        imageio.imwrite(os.path.join(debug_outdir, f"rgb_{step_str}.png"), (rgb_psnr * 255).astype(np.uint8))
-        imageio.imwrite(os.path.join(debug_outdir, f"alpha_{step_str}.png"), (alpha_fine_np * 255).astype(np.uint8))
-        imageio.imwrite(os.path.join(debug_outdir, f"depth_{step_str}.png"), (depth_fine_np / np.max(depth_fine_np + 1e-8) * 255).astype(np.uint8))
-
-        # === Optional: visualize central density slice ===
-        try:
-            res = 256
-            grid = torch.linspace(-0.5, 0.5, res, device=device)
-            xs, ys, zs = torch.meshgrid(grid, grid, grid, indexing='ij')
-            pts = torch.stack([xs, ys, zs], -1).reshape(-1, 3)
-
-            sigma_vals = []
-            for i in range(0, pts.shape[0], 65536):
-                p = pts[i:i+65536]
-                viewdirs = torch.zeros((1, p.shape[0], 3), device=device)
-                out = net(p[None], coarse=True, viewdirs=viewdirs)
-                sigma_vals.append(out[0, :, 3])
-
-            sigma = torch.cat(sigma_vals).relu().view(res, res, res).cpu().numpy()
-            central_slice = sigma[res // 2]
-            plt.imshow(central_slice, cmap='inferno')
-            plt.colorbar()
-            plt.title("Central Sigma Slice (Z-axis)")
-            plt.savefig(os.path.join(debug_outdir, f"sigma_zslice_{step_str}.png"))
-            plt.close()
-        except Exception as e:
-            print(f"⚠️ Failed to compute sigma slice: {e}")
 
         # set the renderer network back to train mode
         renderer.train()
         return vis, vals
 
 
-def main():
-    # parse args, set device, build datasets, net, renderer, etc.
-    trainer = PixelNeRFTrainer()
-    trainer.start()
-
-if __name__ == "__main__":
-    # On Windows, enable freeze_support if needed:
-    multiprocessing.freeze_support()
-    main()
+trainer = PixelNeRFTrainer()
+trainer.start()
