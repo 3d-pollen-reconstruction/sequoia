@@ -27,7 +27,11 @@ class FastPollenAugmentor:
             'softening': self._softening,
             'twisting': self._twisting,
             'stretching': self._stretching,
-            'elastic': self._elastic,
+            #'elastic': self._elastic, probably to unnatural
+            'spikify': self._spikify,
+            'groove': self._groove,
+            'wrinkle': self._wrinkle,
+            'asymmetry': self._asymmetry,
             'full_combo': self._full_combo,
         }
         self._prepare_workspace()
@@ -88,7 +92,53 @@ class FastPollenAugmentor:
         tex.noise_scale = 0.3 + t*0.3
         mod = obj.modifiers.new('Displace', type='DISPLACE')
         mod.texture = tex
-        mod.strength = 0.1 + t*0.3
+        mod.strength = 0.3 + t*0.9
+        
+    def _spikify(self, obj, t):
+        tex = bpy.data.textures.new('TexSpike', type='CLOUDS')
+        tex.noise_scale = 0.03 + t * 0.07 
+        mod = obj.modifiers.new('DisplaceSpike', type='DISPLACE')
+        mod.texture = tex
+        mod.strength = 0.6 + t * 1.2    
+        mod.mid_level = 0.05             
+        mod.direction = 'NORMAL'
+
+    def _groove(self, obj, t):
+        # Rotate to simulate bending along Z (default deform axis)
+        original_rotation = obj.rotation_euler[:]
+        obj.rotation_euler = (1.5708, 0.0, 0.0)  # Rotate X by 90° to simulate Z -> Y
+
+        mod = obj.modifiers.new('GrooveTwist', type='SIMPLE_DEFORM')
+        mod.deform_method = 'BEND'
+        mod.angle = -0.2 - t * 0.6
+
+        # Optionally apply and rotate back
+        bpy.context.scene.objects.active = obj
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        obj.rotation_euler = original_rotation
+
+        
+
+    def _wrinkle(self, obj, t):
+        tex = bpy.data.textures.new('TexWrinkle', type='CLOUDS')
+        tex.noise_scale = 0.15 + t * 0.1
+        mod = obj.modifiers.new('Wrinkle', type='DISPLACE')
+        mod.texture = tex
+        mod.strength = 0.03 + t * 0.1
+        mod.mid_level = 0.4
+        mod.direction = 'NORMAL'
+        
+    def _asymmetry(self, obj, t):
+        mod = obj.modifiers.new('TiltDeform', type='SIMPLE_DEFORM')
+        mod.deform_method = 'TAPER'
+        mod.factor = 0.05 + t * 0.15
+
+        # Simulate axis: rotate object slightly before deformation
+        obj.rotation_euler = (
+            random.uniform(-0.1, 0.1),  # simulate tilt in X
+            random.uniform(-0.1, 0.1),  # simulate tilt in Y
+            random.uniform(-0.1, 0.1)   # simulate twist in Z
+        )
 
     def _shriveling(self, obj, t):
         tex = self.tex_shrivel.copy()
@@ -99,8 +149,8 @@ class FastPollenAugmentor:
 
     def _softening(self, obj, t):
         mod = obj.modifiers.new('SmoothLap', type='LAPLACIANSMOOTH')
-        mod.iterations = int(6 + t*10)  # vorher: 3 + t*5
-        mod.lambda_factor = 0.6 + t*0.8 # vorher: 0.3 + t*0.4
+        mod.iterations = int(15 + t*25)      # deutlich mehr Iterationen
+        mod.lambda_factor = 1.2 + t*1.5      # deutlich stärkerer Glättungsfaktor
 
     def _twisting(self, obj, t):
         mod = obj.modifiers.new('Twist', type='SIMPLE_DEFORM')
@@ -130,8 +180,59 @@ class FastPollenAugmentor:
         bpy.ops.object.mode_set(mode='OBJECT')
 
     def _full_combo(self, obj, t):
-        for fn in [self._swelling, self._shriveling, self._softening, self._twisting, self._stretching, self._elastic]:
-            fn(obj, t)
+            print("[ℹ️] Running full_combo with all deformations")
+            base = obj
+            base.name = "BaseCombo"
+            deformed_objs = []
+
+            for name, fn in self.deformations.items():
+                if fn == self._full_combo:
+                    continue
+                try:
+                    # Copy base mesh
+                    dup = base.copy()
+                    dup.data = base.data.copy()
+                    bpy.context.scene.objects.link(dup)
+
+                    # Apply deformation
+                    fn(dup, t)
+
+                    # Apply all modifiers
+                    bpy.context.scene.objects.active = dup
+                    for mod in list(dup.modifiers):
+                        while dup.modifiers[0].name != mod.name:
+                            bpy.ops.object.modifier_move_up(modifier=mod.name)
+                        bpy.ops.object.modifier_apply(modifier=mod.name)
+
+                    deformed_objs.append(dup)
+
+                except Exception as e:
+                    print("[⚠️] Skipping '{}' in full_combo due to error: {}".format(name, str(e)))
+
+            # Join all deformed objects
+            if len(deformed_objs) > 1:
+                for objx in deformed_objs:
+                    objx.select = True
+                bpy.context.scene.objects.active = deformed_objs[0]
+                bpy.ops.object.join()
+                final = bpy.context.active_object
+            elif len(deformed_objs) == 1:
+                final = deformed_objs[0]
+            else:
+                print("[❌] full_combo failed to generate any output")
+                return None
+
+            # Remove base object
+            if base.name in bpy.context.scene.objects:
+                bpy.context.scene.objects.unlink(base)
+            if base.name in bpy.data.objects:
+                bpy.data.objects.remove(base, do_unlink=True)
+
+            return final
+
+
+
+
 
     def augment(self):
         files = [f for f in os.listdir(self.mesh_dir) if f.lower().endswith('.stl')]
@@ -139,22 +240,35 @@ class FastPollenAugmentor:
             # Skip mesh if fully done
             mesh_prog = self.progress.get(fname, {})
             base = self.import_and_reduce(os.path.join(self.mesh_dir, fname))
+
             for name, fn in self.deformations.items():
                 completed = mesh_prog.get(name, -1)
                 out_dir = os.path.join(self.output_dir, name)
-                for i in range(completed+1, self.num_augmentations):
-                    print('Processing {0} ({1}/{2})'.format(fname, i+1, self.num_augmentations))
-                    t = float(i)/(self.num_augmentations-1) if self.num_augmentations>1 else 0
-                    dup = base.copy(); dup.data = base.data.copy()
+
+                for i in range(completed + 1, self.num_augmentations):
+                    print('Processing {0} {1} ({2}/{3})'.format(fname, name, i + 1, self.num_augmentations))
+                    t = float(i) / (self.num_augmentations - 1) if self.num_augmentations > 1 else 0
+
+                    # Duplicate base mesh
+                    dup = base.copy()
+                    dup.data = base.data.copy()
                     bpy.context.scene.objects.link(dup)
-                    fn(dup, t)
-                    out_name = '{0}_{1}_{2}.stl'.format(os.path.splitext(fname)[0], name, i+1)
-                    self.bake_and_export(dup, os.path.join(out_dir, out_name))
-                    # update progress
+
+                    # Apply augmentation function and safely capture output
+                    result = fn(dup, t)
+                    if result is None:
+                        result = dup
+
+                    out_name = '{0}_{1}_{2}.stl'.format(os.path.splitext(fname)[0], name, i + 1)
+                    self.bake_and_export(result, os.path.join(out_dir, out_name))
+
+                    # Update progress
                     mesh_prog[name] = i
                     self.progress[fname] = mesh_prog
                     self._save_progress()
+
         print('🎉 All augmentations done.')
+
 
 if __name__=='__main__':
     p = argparse.ArgumentParser()
