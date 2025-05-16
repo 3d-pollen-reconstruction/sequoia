@@ -1,7 +1,7 @@
 from .vgg_backbone import VGG16TensorflowAlign, VGG16P2M, VGG16Recons
 from .resnet_backbone import resnet50
 
-PRETRAINED_WEIGHTS_PATH = './notebooks/p2m/resnet.pth'
+PRETRAINED_WEIGHTS_PATH = './notebooks/p2m/resnet.pth.tar'
 
 def get_backbone(options):
     if options.backbone.startswith("vgg16"):

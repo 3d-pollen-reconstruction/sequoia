@@ -110,9 +110,9 @@ class P2MLoss(nn.Module):
            
 
             # Chamfer via knn_points
-            knn1 = knn_points(gt_coord, P, K=1)
+            knn1 = knn_points(gt_coord, P, K=5)
             d1 = torch.sqrt(knn1.dists[...,0] + 1e-12)
-            knn2 = knn_points(P, gt_coord, K=1)
+            knn2 = knn_points(P, gt_coord, K=5)
             d2 = torch.sqrt(knn2.dists[..., 0] + 1e-12)
             idx2 = knn2.idx[...,   0]
 

@@ -3,7 +3,7 @@ from torch import nn
 from torchvision.models import ResNet
 from torchvision.models.resnet import Bottleneck
 
-PRETRAINED_WEIGHTS_PATH = './notebooks/p2m/resnet.pth'
+PRETRAINED_WEIGHTS_PATH = './notebooks/p2m/resnet.pth.tar'
 
 class P2MResNet(ResNet):
     def __init__(self, *args, **kwargs):
