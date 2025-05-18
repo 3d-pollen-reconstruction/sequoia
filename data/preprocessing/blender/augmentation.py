@@ -91,31 +91,51 @@ class FastPollenAugmentor:
         bpy.data.objects.remove(obj, do_unlink=True)
 
     def _swelling(self, obj, t):
-        # Echtes Swelling: gleichmäßige Skalierung
-        scale_factor = 1.0 + 0.2 * t  # bis zu 20% größer
-        obj.scale = (obj.scale[0] * scale_factor, obj.scale[1] * scale_factor, obj.scale[2] * scale_factor)
+        # Lokales Swelling mit einer Blend-Textur (weicher Übergang)
+        tex = bpy.data.textures.new('TexLocalSwelling', type='BLEND')
+        tex.progression = 'SPHERICAL'
+    
+        # Erstelle ein leeres Objekt als Zentrum und Skala des Swellings
+        empty = bpy.data.objects.new('SwellingEmpty', None)
+        bpy.context.scene.objects.link(empty)
+        empty.location = (
+            obj.location.x + random.uniform(-0.3, 0.3),
+            obj.location.y + random.uniform(-0.3, 0.3),
+            obj.location.z + random.uniform(-0.3, 0.3)
+        )
+        # Skaliere das Empty für die Swelling-Größe
+        scale = 0.25 + t * 0.15
+        empty.scale = (scale, scale, scale)
+    
+        mod = obj.modifiers.new('LocalSwelling', type='DISPLACE')
+        mod.texture = tex
+        mod.strength = 0.2 + t * 0.3
+        mod.mid_level = 0.0
+        mod.direction = 'NORMAL'
+        mod.texture_coords = 'OBJECT'
+        mod.texture_coords_object = empty
         
     def _spikify(self, obj, t):
         tex = bpy.data.textures.new('TexSpike', type='CLOUDS')
         tex.noise_scale = 0.03 + t * 0.07 
         mod = obj.modifiers.new('DisplaceSpike', type='DISPLACE')
         mod.texture = tex
-        mod.strength = 0.6 + t * 1.2    
+        mod.strength = 0.2 + t * 1    
         mod.mid_level = 0.05             
         mod.direction = 'NORMAL'
 
     def _groove(self, obj, t):
         original_rotation = obj.rotation_euler[:]
         obj.rotation_euler = (1.5708, 0.0, 0.0)  # Rotate for BEND axis
-
+    
         mod = obj.modifiers.new('GrooveTwist', type='SIMPLE_DEFORM')
         mod.deform_method = 'BEND'
-        mod.angle = -0.2 - t * 0.6
-
+        mod.angle = -0.1 - t * 0.2  # Weniger Wachstum
+    
         bpy.context.scene.objects.active = obj
         bpy.ops.object.select_all(action='DESELECT')
         obj.select = True
-
+    
         self._make_modifier_first(obj, mod)
         bpy.ops.object.modifier_apply(modifier=mod.name)
         obj.rotation_euler = original_rotation
@@ -124,23 +144,23 @@ class FastPollenAugmentor:
 
     def _wrinkle(self, obj, t):
         tex = bpy.data.textures.new('TexWrinkle', type='CLOUDS')
-        tex.noise_scale = 0.15 + t * 0.1
+        tex.noise_scale = 0.35 + t * 0.25   # Deutlich größere Strukturen (Roughness)
         mod = obj.modifiers.new('Wrinkle', type='DISPLACE')
         mod.texture = tex
-        mod.strength = 0.03 + t * 0.1
-        mod.mid_level = 0.4
+        mod.strength = 0.02 + t * 0.1       # Stärke bleibt gleich, nur die Größe der Falten wächst
+        mod.mid_level = 0.3
         mod.direction = 'NORMAL'
         
     def _asymmetry(self, obj, t):
         mod = obj.modifiers.new('TiltDeform', type='SIMPLE_DEFORM')
         mod.deform_method = 'TAPER'
-        mod.factor = 0.05 + t * 0.15
-
-        # Simulate axis: rotate object slightly before deformation
+        mod.factor = 0.03 + t * 0.08
+    
+        # Simuliere Achsenrotation, aber dezenter
         obj.rotation_euler = (
-            random.uniform(-0.1, 0.1),  # simulate tilt in X
-            random.uniform(-0.1, 0.1),  # simulate tilt in Y
-            random.uniform(-0.1, 0.1)   # simulate twist in Z
+            random.uniform(-0.05, 0.05),  # weniger Tilt in X
+            random.uniform(-0.05, 0.05),  # weniger Tilt in Y
+            random.uniform(-0.05, 0.05)   # weniger Twist in Z
         )
 
     def _shriveling(self, obj, t):
@@ -151,42 +171,99 @@ class FastPollenAugmentor:
         mod.strength = -(0.1 + t*0.3)
 
     def _softening(self, obj, t):
-        mod = obj.modifiers.new('SmoothLap', type='LAPLACIANSMOOTH')
-        mod.iterations = int(6 + t*10)      # deutlich mehr Iterationen
-        mod.lambda_factor = 1.5 + t*3      # deutlich stärkerer Glättungsfaktor
+        mod = obj.modifiers.new('Smooth', type='SMOOTH')
+        mod.iterations = int(2 + t * 4)   # Wenige Iterationen, schnell
+        mod.factor = 0.3 + t * 0.4        # Glättungsstärke  # deutlich stärkerer Glättungsfaktor
 
     def _twisting(self, obj, t):
         mod = obj.modifiers.new('Twist', type='SIMPLE_DEFORM')
         mod.deform_method = 'TWIST'
-        mod.angle = 0.1 + t*0.4
+        mod.angle = 0.05 + t * 0.15
 
     def _stretching(self, obj, t):
         mod = obj.modifiers.new('Taper', type='SIMPLE_DEFORM')
         mod.deform_method = 'TAPER'
-        mod.factor = (0.1 + t*0.9) / 3
+        mod.factor = (0.05 + t * 0.25) / 3
 
     def _elastic(self, obj, t):
+        # Lattice-Auflösung für feine Details
         lat_data = bpy.data.lattices.new('Lat')
-        lat_data.points_u = lat_data.points_v = lat_data.points_w = 3
+        lat_data.points_u = lat_data.points_v = lat_data.points_w = 4
         lat = bpy.data.objects.new('LatObj', lat_data)
         bpy.context.scene.objects.link(lat)
         lat.location = obj.location
         lat.scale = obj.dimensions
+    
         mod = obj.modifiers.new('Lattice', type='LATTICE')
         mod.object = lat
+    
         bpy.context.scene.objects.active = lat
         bpy.ops.object.mode_set(mode='EDIT')
-        amp = 0.02 + t*0.1
+    
+        # Moderate Amplituden, stärkere Verzerrung an den Rändern, aber insgesamt dezent
+        base_amp = 0.01 + t * 0.05
         for p in lat.data.points:
-            co = p.co_deform
-            p.co_deform = (co[0]+random.uniform(-amp,amp), co[1]+random.uniform(-amp,amp), co[2]+random.uniform(-amp,amp))
+            dist = sum(abs(x - 0.5) for x in p.co_deform) / 1.5
+            amp_x = base_amp * (0.7 + 0.5 * dist) * random.uniform(0.8, 1.2)
+            amp_y = base_amp * (0.7 + 0.5 * dist) * random.uniform(0.8, 1.2)
+            amp_z = base_amp * (0.7 + 0.5 * dist) * random.uniform(0.8, 1.2)
+            # Dezente, aber zufällige Richtung
+            p.co_deform = (
+                p.co_deform[0] + random.uniform(-amp_x, amp_x),
+                p.co_deform[1] + random.uniform(-amp_y, amp_y),
+                p.co_deform[2] + random.uniform(-amp_z, amp_z)
+            )
+    
         bpy.ops.object.mode_set(mode='OBJECT')
 
     def _full_combo(self, obj, t):
-            print("[ℹ️] Running full_combo with all deformations")
-            for fn in [self._swelling, self._twisting, self._stretching, self._groove, self._wrinkle, self._asymmetry]:
-                t_mod = t * 0.3
-                fn(obj, t_mod)
+            print("[ℹ️] Running full_combo with multiple moderate deformations")
+        
+            # Twist
+            mod_twist = obj.modifiers.new('Twist', type='SIMPLE_DEFORM')
+            mod_twist.deform_method = 'TWIST'
+            mod_twist.angle = 0.01 + t * 0.03  # moderat
+        
+            # Bend
+            mod_bend = obj.modifiers.new('Bend', type='SIMPLE_DEFORM')
+            mod_bend.deform_method = 'BEND'
+            mod_bend.angle = -0.01 - t * 0.03  # moderat
+        
+            # Taper
+            mod_taper = obj.modifiers.new('Taper', type='SIMPLE_DEFORM')
+            mod_taper.deform_method = 'TAPER'
+            mod_taper.factor = 0.003 + t * 0.012  # moderat
+        
+            # Stretch
+            mod_stretch = obj.modifiers.new('Stretch', type='SIMPLE_DEFORM')
+            mod_stretch.deform_method = 'STRETCH'
+            mod_stretch.factor = 0.003 + t * 0.012  # moderat
+        
+            # Lattice (Meshdeform)
+            lat_data = bpy.data.lattices.new('LatCombo')
+            lat_data.points_u = lat_data.points_v = lat_data.points_w = 4
+            lat = bpy.data.objects.new('LatObjCombo', lat_data)
+            bpy.context.scene.objects.link(lat)
+            lat.location = obj.location
+            lat.scale = obj.dimensions
+        
+            mod_lat = obj.modifiers.new('LatticeCombo', type='LATTICE')
+            mod_lat.object = lat
+        
+            bpy.context.scene.objects.active = lat
+            bpy.ops.object.mode_set(mode='EDIT')
+            base_amp = 0.0015 + t * 0.004  # moderat
+            for p in lat.data.points:
+                dist = sum(abs(x - 0.5) for x in p.co_deform) / 1.5
+                amp = base_amp * (0.7 + 0.5 * dist) * random.uniform(0.95, 1.05)
+                p.co_deform = (
+                    p.co_deform[0] + random.uniform(-amp, amp),
+                    p.co_deform[1] + random.uniform(-amp, amp),
+                    p.co_deform[2] + random.uniform(-amp, amp)
+                )
+            bpy.ops.object.mode_set(mode='OBJECT')
+        
+            # Optional: Mesh konvertieren, damit alle Modifier angewendet werden
             bpy.context.scene.objects.active = obj
             bpy.ops.object.select_all(action='DESELECT')
             obj.select = True
@@ -205,7 +282,8 @@ class FastPollenAugmentor:
 
                 for i in range(completed + 1, self.num_augmentations):
                     print('Processing {0} {1} ({2}/{3})'.format(fname, name, i + 1, self.num_augmentations))
-                    t = float(i) / (self.num_augmentations - 1) if self.num_augmentations > 1 else 0
+                    # factor of 0.4 for 5 augmentations
+                    t = float(i) / (self.num_augmentations - 1) * 0.4 if self.num_augmentations > 1 else 0
 
                     # Duplicate base mesh
                     dup = base.copy()
