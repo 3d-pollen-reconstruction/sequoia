@@ -100,6 +100,13 @@ def extra_args(parser):
         action="store_true",
         help="Set to indicate poses may change between objects. In most of our datasets, the test set has fixed poses.",
     )
+    
+    parser.add_argument(
+        "--gen_video",
+        action="store_true",
+        help="Generate video from novel views",
+        default=False,
+    )
     return parser
 
 import trimesh
@@ -107,6 +114,53 @@ import numpy as np
 
 from scipy.spatial.distance import directed_hausdorff
 
+def generate_novel_views(images, poses, focal, c, z_near, z_far, renderer, net, device, output_dir, obj_name, H, W, args):
+    # Wir nehmen die ersten beiden Ansichten als Input
+    src_view = torch.tensor([0, 1], dtype=torch.long)
+    NS = len(src_view)
+    # 30 gleichmäßig verteilte Winkel
+    num_views = 30
+    radius = (z_near + z_far) * 0.5
+    elevation = -10.0  # oder nach Bedarf anpassen
+
+    # 30 Posen auf einem Kreis
+    render_poses = torch.stack(
+        [
+            util.pose_spherical(angle, elevation, radius)
+            for angle in np.linspace(-180, 180, num_views + 1)[:-1]
+        ],
+        0,
+    ).to(device)  # (30, 4, 4)
+
+    render_rays = util.gen_rays(
+        render_poses,
+        W,
+        H,
+        focal * args.scale,
+        z_near,
+        z_far,
+        c=c * args.scale if c is not None else None,
+    ).to(device)  # (30, H, W, 8)
+
+    net.encode(
+        images[src_view].to(device).unsqueeze(0),
+        poses[src_view].to(device).unsqueeze(0),
+        focal.to(device),
+        c=c,
+    )
+
+    all_rgb = []
+    for rays in tqdm.tqdm(torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0)):
+        rgb, _ = renderer(rays[None])
+        all_rgb.append(rgb[0].cpu())
+    rgb_fine = torch.cat(all_rgb)
+    frames = rgb_fine.view(num_views, H, W, 3).numpy()
+
+    # Video speichern
+    video_path = os.path.join(output_dir, f"{obj_name}_novel_views_30.mp4")
+    imageio.mimwrite(video_path, (frames * 255).astype(np.uint8), fps=30, quality=8)
+    print(f"Novel-view-Video (30 Views) gespeichert unter: {video_path}")
+    
 def hausdorff_distance(pts1, pts2):
     hd1 = directed_hausdorff(pts1, pts2)[0]
     hd2 = directed_hausdorff(pts2, pts1)[0]
@@ -342,17 +396,19 @@ def main():
             all_rgb = torch.clamp(
                 all_rgb.reshape(n_gen_views, H, W, 3), 0.0, 1.0
             ).numpy()  # (NV-NS, H, W, 3)
+            
+            
             if has_output:
                 obj_out_dir = os.path.join(output_dir, obj_name)
                 os.makedirs(obj_out_dir, exist_ok=True)
+                frame_paths = []
                 for i in range(n_gen_views):
                     out_file = os.path.join(
                         obj_out_dir, "{:06}.png".format(novel_view_idxs[i].item())
                     )
                     imageio.imwrite(out_file, (all_rgb[i] * 255).astype(np.uint8))
-                    
-                    
-
+                    frame_paths.append(out_file)
+            
                     if args.write_depth:
                         out_depth_file = os.path.join(
                             obj_out_dir, "{:06}_depth.exr".format(novel_view_idxs[i].item())
@@ -364,6 +420,58 @@ def main():
                         depth_cmap_norm = util.cmap(all_depth[i])
                         cv2.imwrite(out_depth_file, all_depth[i])
                         imageio.imwrite(out_depth_norm_file, depth_cmap_norm)
+            
+               
+            
+                # --- 30 Novel Views aus 2 Input-Views generieren ---
+                try:
+                    if args.gen_video:
+                        # print near far focal
+                        print("ZNear:", z_near)
+                        print("ZFar:", z_far)
+                        print("Focal:", focal)
+                        src_view = torch.tensor([0, 1], dtype=torch.long)
+                        num_views = 30
+                        radius = (z_near + z_far) * 0.5
+                        elevation = -10.0
+                
+                        render_poses = torch.stack(
+                            [
+                                util.pose_spherical(angle, elevation, radius)
+                                for angle in np.linspace(-180, 180, num_views + 1)[:-1]
+                            ],
+                            0,
+                        ).to(device)
+                
+                        render_rays = util.gen_rays(
+                            render_poses,
+                            W,
+                            H,
+                            focal * args.scale,
+                            z_near,
+                            z_far,
+                            c=c * args.scale if c is not None else None,
+                        ).to(device)
+                
+                        net.encode(
+                            images[src_view].to(device).unsqueeze(0),
+                            data["poses"][0][src_view].to(device).unsqueeze(0),
+                            focal.to(device),
+                            c=c,
+                        )
+                
+                        all_rgb_novel = []
+                        for rays in tqdm.tqdm(torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0), desc="Novel 30-View"):
+                            rgb, _ = render_par(rays[None])
+                            all_rgb_novel.append(rgb[0].cpu())
+                        rgb_fine_novel = torch.cat(all_rgb_novel)
+                        frames_novel = rgb_fine_novel.view(num_views, H, W, 3).numpy()
+                
+                        video_path_novel = os.path.join(obj_out_dir, f"{obj_name}_novel_views_30.mp4")
+                        imageio.mimwrite(video_path_novel, (frames_novel * 255).astype(np.uint8), fps=30, quality=8)
+                        print(f"Novel-view-Video (30 Views, aus 2 Input-Views) gespeichert unter: {video_path_novel}")
+                except Exception as e:
+                    print(f"Fehler beim Erstellen des 30-View-Videos: {e}")
 
             curr_ssim = 0.0
             curr_psnr = 0.0
@@ -459,6 +567,9 @@ def main():
                         # Normalisiere beide Meshes
                         mesh_pred = normalize_mesh(mesh_pred)
                         mesh_gt = normalize_mesh(mesh_gt)
+                        
+                        mesh_pred = mesh_pred.convex_hull
+                        mesh_gt = mesh_gt.convex_hull
                     
                         # Sample points
                         pts_pred, _ = trimesh.sample.sample_surface(mesh_pred, 5000)
