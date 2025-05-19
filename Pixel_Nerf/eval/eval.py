@@ -23,7 +23,7 @@ import traceback
 def extra_args(parser):
     parser.add_argument("--split", type=str, default="test")
     parser.add_argument("--eval_view_list", type=str, default=None)
-    parser.add_argument("--coarse", action="store_true")
+    parser.add_argument("--coarse", action="store_true", help="Coarse network as fine")
     parser.add_argument("--no_compare_gt", action="store_true")
     parser.add_argument("--multicat", action="store_true")
     parser.add_argument("--output", "-O", type=str, default="eval")
@@ -33,7 +33,7 @@ def extra_args(parser):
     parser.add_argument("--write_compare", action="store_true")
     parser.add_argument("--free_pose", action="store_true")
     parser.add_argument("--mesh_res", type=int, default=256)
-    parser.add_argument("--mesh_thresh", type=float, default=0.1)
+    parser.add_argument("--mesh_thresh", type=float, default=0.001)
     return parser
 
 
@@ -74,12 +74,24 @@ if __name__ == "__main__":
     renderer = NeRFRenderer.from_conf(
         conf["renderer"], lindisp=dset.lindisp, eval_batch_size=args.ray_batch_size
     ).to(device)
+    
     if args.coarse:
         net.mlp_fine = None
+
+    if renderer.n_coarse < 64:
+        # Ensure decent sampling resolution
+        renderer.n_coarse = 64
+    if args.coarse:
+        renderer.n_coarse = 64
+        renderer.n_fine = 128
+        renderer.using_fine = True
+    
     renderer.n_coarse = max(renderer.n_coarse, 64)
+    renderer.n_fine = max(renderer.n_fine, 256)
     render_par = renderer.bind_parallel(net, args.gpu_id, simple_output=True).eval()
 
     z_near, z_far = dset.z_near, dset.z_far
+    print(f"z_near: {z_near}, z_far: {z_far}", flush=True)
 
     for obj_idx, data in enumerate(data_loader):
         try:
@@ -147,20 +159,26 @@ if __name__ == "__main__":
             mesh_path = os.path.join(obj_out_dir, f"{obj_name}_mesh.stl")
             mesh.export(mesh_path)
             print(f"Mesh saved to {mesh_path}", flush=True)
-            continue
 
             if args.no_compare_gt:
                 continue
+            
+            NV, _, H, W = images.shape
 
-            rays = util.gen_rays(
-                tgt_pose.squeeze(0).unsqueeze(0),
-                images.shape[-1],
-                images.shape[-2],
-                focal[None].to(device),
-                z_near,
-                z_far,
-                c,
-            )
+
+            rays = (
+                util.gen_rays(
+                    poses.reshape(-1, 4, 4),
+                    W,
+                    H,
+                    focal * args.scale,
+                    z_near,
+                    z_far,
+                    c=c * args.scale if c is not None else None,
+                )
+                .reshape(-1, 8)
+                .to(device=device)
+            )  # ((NV[-NS])*H*W, 8)
 
             rays_spl = torch.split(rays, args.ray_batch_size, dim=0)
 

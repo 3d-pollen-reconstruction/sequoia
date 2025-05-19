@@ -14,68 +14,43 @@ def marching_cubes(
     c1=[-1, -1, -1],
     c2=[1, 1, 1],
     reso=[128, 128, 128],
-    isosurface=50.0,
+    isosurface=0.01,
     sigma_idx=3,
     eval_batch_size=100000,
     coarse=True,
     device=None,
 ):
     """
-    Run marching cubes on network. Uses PyMCubes.
-    WARNING: does not make much sense with viewdirs in current form, since
-    sigma depends on viewdirs.
-    :param occu_net main NeRF type network
-    :param c1 corner 1 of marching cube bounds x,y,z
-    :param c2 corner 2 of marching cube bounds x,y,z (all > c1)
-    :param reso resolutions of marching cubes x,y,z
-    :param isosurface sigma-isosurface of marching cubes
-    :param sigma_idx index of 'sigma' value in last dimension of occu_net's output
-    :param eval_batch_size batch size for evaluation
-    :param coarse whether to use coarse NeRF for evaluation
-    :param device optionally, device to put points for evaluation.
-    By default uses device of occu_net's first parameter.
+    Run marching cubes on network. Uses skimage (more robust).
     """
-    if occu_net.use_viewdirs:
-        warnings.warn(
-            "Running marching cubes with fake view dirs (pointing to origin), output may be invalid"
-        )
+    import skimage.measure
+
     with torch.no_grad():
         grid = util.gen_grid(*zip(c1, c2, reso), ij_indexing=True)
-        is_train = occu_net.training
-
-        print("Evaluating sigma @", grid.size(0), "points")
-        occu_net.eval()
-
-        all_sigmas = []
         if device is None:
             device = next(occu_net.parameters()).device
-        grid_spl = torch.split(grid, eval_batch_size, dim=0)
-        if occu_net.use_viewdirs:
-            fake_viewdirs = -grid / torch.norm(grid, dim=-1).unsqueeze(-1)
-            vd_spl = torch.split(fake_viewdirs, eval_batch_size, dim=0)
-            for pnts, vd in tqdm.tqdm(zip(grid_spl, vd_spl), total=len(grid_spl)):
-                outputs = occu_net(
-                    pnts.to(device=device), coarse=coarse, viewdirs=vd.to(device=device)
-                )
-                sigmas = outputs[..., sigma_idx]
-                all_sigmas.append(sigmas.cpu())
-        else:
-            for pnts in tqdm.tqdm(grid_spl):
-                outputs = occu_net(pnts.to(device=device), coarse=coarse)
-                sigmas = outputs[..., sigma_idx]
-                all_sigmas.append(sigmas.cpu())
-        sigmas = torch.cat(all_sigmas, dim=0)
-        sigmas = sigmas.view(*reso).cpu().numpy()
+        grid = grid.to(device)
 
-        print("Running marching cubes")
-        vertices, triangles = mcubes.marching_cubes(sigmas, isosurface)
-        # Scale
+        all_sigmas = []
+        for chunk in tqdm.tqdm(torch.split(grid, eval_batch_size, dim=0), desc="Evaluating sigma"):
+            viewdirs = torch.zeros((1, chunk.size(0), 3), device=device)
+            output = occu_net(chunk.unsqueeze(0), coarse=coarse, viewdirs=viewdirs)
+            sigma = output[0, :, sigma_idx]
+            all_sigmas.append(sigma)
+
+        sigmas = torch.cat(all_sigmas).view(*reso).cpu().numpy()
+        print(f"[marching_cubes] Sigma stats: min={sigmas.min():.6f}, max={sigmas.max():.6f}, mean={sigmas.mean():.6f}")
+
+        if np.all(sigmas <= isosurface):
+            raise ValueError(f"All sigma values are below isosurface={isosurface}")
+
+        verts, faces, normals, _ = skimage.measure.marching_cubes(sigmas, level=isosurface)
+        # Rescale vertices
         c1, c2 = np.array(c1), np.array(c2)
-        vertices *= (c2 - c1) / np.array(reso)
+        scale = (c2 - c1) / np.array(reso)
+        verts = verts * scale + c1
+        return verts, faces
 
-    if is_train:
-        occu_net.train()
-    return vertices + c1, triangles
 
 
 def save_obj(vertices, triangles, path, vert_rgb=None):

@@ -51,7 +51,7 @@ def extra_args(parser):
     # Mesh-specific args
     parser.add_argument("--mesh_res", type=int, default=256,
                         help="Marching Cubes grid resolution")
-    parser.add_argument("--mesh_thresh", type=float, default=10,
+    parser.add_argument("--mesh_thresh", type=float, default=20.0,
                         help="Density threshold for isosurface")
     return parser
 
