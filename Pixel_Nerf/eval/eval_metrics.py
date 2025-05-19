@@ -5,12 +5,13 @@ python eval.py --gpu_id=<gpu list> -n <expname> -c <conf> -D /home/group/data/ch
 """
 import sys
 import os
-
+import open3d as o3d
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
 
 import torch
+from matplotlib import pyplot as plt
 import numpy as np
 import imageio
 import skimage.measure
@@ -101,6 +102,40 @@ def extra_args(parser):
     )
     return parser
 
+import trimesh
+import numpy as np
+
+from scipy.spatial.distance import directed_hausdorff
+
+def hausdorff_distance(pts1, pts2):
+    hd1 = directed_hausdorff(pts1, pts2)[0]
+    hd2 = directed_hausdorff(pts2, pts1)[0]
+    return max(hd1, hd2)
+
+def fscore(pts1, pts2, threshold):
+    d1 = np.min(np.linalg.norm(pts1[:, None, :] - pts2[None, :, :], axis=-1), axis=1)
+    d2 = np.min(np.linalg.norm(pts2[:, None, :] - pts1[None, :, :], axis=-1), axis=1)
+    recall = (d1 < threshold).mean()
+    precision = (d2 < threshold).mean()
+    if recall + precision == 0:
+        return 0.0
+    return 2 * recall * precision / (recall + precision)
+
+def chamfer_distance(pts_pred, pts_gt):
+    # pts_pred, pts_gt: (N, 3)
+    dist_pred_to_gt = np.min(np.linalg.norm(pts_pred[:, None, :] - pts_gt[None, :, :], axis=-1), axis=1)
+    dist_gt_to_pred = np.min(np.linalg.norm(pts_gt[:, None, :] - pts_pred[None, :, :], axis=-1), axis=1)
+    chamfer = dist_pred_to_gt.mean() + dist_gt_to_pred.mean()
+    return chamfer
+
+def normalize_mesh(mesh):
+    # Zentriere auf Mittelpunkt
+    verts = mesh.vertices - mesh.vertices.mean(axis=0)
+    # Skaliere auf Einheitswürfel (maximale Ausdehnung = 1)
+    scale = np.linalg.norm(verts.max(axis=0) - verts.min(axis=0))
+    verts = verts / scale
+    mesh.vertices = verts
+    return mesh
 
 def calc_mesh_metrics():
     return {}
@@ -315,6 +350,8 @@ def main():
                         obj_out_dir, "{:06}.png".format(novel_view_idxs[i].item())
                     )
                     imageio.imwrite(out_file, (all_rgb[i] * 255).astype(np.uint8))
+                    
+                    
 
                     if args.write_depth:
                         out_depth_file = os.path.join(
@@ -378,10 +415,6 @@ def main():
                 "{} {} {} {}\n".format(obj_name, curr_psnr, curr_ssim, curr_cnt)
             )
             
-
-# === Mesh generation block ===
-# Inject this just after the rendering block in the eval script
-# === Mesh generation block ===
             if args.gen_meshes:
                 from util.recon import marching_cubes, save_obj  # Assuming your marching_cubes is in util/recon.py
 
@@ -414,16 +447,109 @@ def main():
                     mesh_dir = os.path.join(obj_out_dir, f"{obj_name}_mesh.obj")
                     save_obj(verts, tris, mesh_dir)
                     calc_mesh_metrics()
+                    mesh_id = obj_name  # ggf. anpassen, falls obj_name nicht exakt der Mesh-ID entspricht
+                    gt_mesh_path = os.path.join("../data/processed/meshes", f"{mesh_id}.stl")
+                    print("GT-Mesh-Pfad:", gt_mesh_path)
+
+                    if os.path.exists(gt_mesh_path):
+                        # Erzeuge Mesh-Objekt aus marching_cubes-Ausgabe
+                        mesh_pred = trimesh.Trimesh(vertices=verts, faces=tris, process=False)
+                        mesh_gt = trimesh.load(gt_mesh_path, process=False)
+                    
+                        # Normalisiere beide Meshes
+                        mesh_pred = normalize_mesh(mesh_pred)
+                        mesh_gt = normalize_mesh(mesh_gt)
+                    
+                        # Sample points
+                        pts_pred, _ = trimesh.sample.sample_surface(mesh_pred, 5000)
+                        pts_gt, _ = trimesh.sample.sample_surface(mesh_gt, 5000)
+                    
+                        # Open3D-PointClouds
+                        pcd_pred = o3d.geometry.PointCloud()
+                        pcd_pred.points = o3d.utility.Vector3dVector(pts_pred)
+                        pcd_gt = o3d.geometry.PointCloud()
+                        pcd_gt.points = o3d.utility.Vector3dVector(pts_gt)
+                    
+                        # Alignment mit ICP (Rotation, Translation, Skalierung)
+                        threshold = 0.05  # ggf. anpassen
+                        reg_p2p = o3d.pipelines.registration.registration_icp(
+                            pcd_pred, pcd_gt, threshold, np.eye(4),
+                            o3d.pipelines.registration.TransformationEstimationPointToPoint()
+                        )
+                        trans_init = reg_p2p.transformation
+                        pts_pred_aligned = np.asarray(
+                            (trans_init @ np.hstack([pts_pred, np.ones((pts_pred.shape[0], 1))]).T).T
+                        )[:, :3]
+                    
+                        # Chamfer auf ausgerichteten Punkten
+                        chamfer = chamfer_distance(pts_pred_aligned, pts_gt)
+                        
+                        # Volumen und Oberfläche
+                        vol_pred = mesh_pred.volume
+                        vol_gt = mesh_gt.volume
+                        vol_diff = abs(vol_pred - vol_gt)
+                        vol_rel_diff = abs(vol_pred - vol_gt) / vol_gt if vol_gt != 0 else float('inf')
+
+                        area_pred = mesh_pred.area
+                        area_gt = mesh_gt.area
+                        area_diff = abs(area_pred - area_gt)
+                        area_rel_diff = abs(area_pred - area_gt) / area_gt if area_gt != 0 else float('inf')
+
+                        # Hausdorff-Distanz
+                        hausdorff = hausdorff_distance(pts_pred_aligned, pts_gt)
+
+                        # F-Score (z.B. Threshold = 0.01 * Bounding-Box-Diagonale)
+                        bb_diag = np.linalg.norm(pts_gt.max(axis=0) - pts_gt.min(axis=0))
+                        fscore_val = fscore(pts_pred_aligned, pts_gt, threshold=0.01 * bb_diag)
+
+                        # Ausgabe
+                        print(f"Chamfer: {chamfer:.6f}")
+                        print(f"Volumen GT: {vol_gt:.6f}, Pred: {vol_pred:.6f}, Diff: {vol_diff:.6f}, RelDiff: {vol_rel_diff:.4%}")
+                        print(f"Fläche  GT: {area_gt:.6f}, Pred: {area_pred:.6f}, Diff: {area_diff:.6f}, RelDiff: {area_rel_diff:.4%}")
+                        print(f"Hausdorff: {hausdorff:.6f}")
+                        print(f"F-Score (1% BB): {fscore_val:.4f}")
+                        
+                                                # ...nach print(f"Chamfer Distance zu GT-Mesh für {mesh_id}: {chamfer:.6f}")...
+                        
+                        # Speichern der Metriken in eine Datei
+                        metrics_path = os.path.join(obj_out_dir, f"{mesh_id}_mesh_metrics.txt")
+                        with open(metrics_path, "w") as f:
+                            f.write(f"Mesh: {mesh_id}\n")
+                            f.write(f"Chamfer: {chamfer:.6f}\n")
+                            f.write(f"Volumen GT: {vol_gt:.6f}\n")
+                            f.write(f"Volumen Pred: {vol_pred:.6f}\n")
+                            f.write(f"Volumen Diff: {vol_diff:.6f}\n")
+                            f.write(f"Volumen RelDiff: {vol_rel_diff:.4%}\n")
+                            f.write(f"Flaeche GT: {area_gt:.6f}\n")
+                            f.write(f"Flaeche Pred: {area_pred:.6f}\n")
+                            f.write(f"Flaeche Diff: {area_diff:.6f}\n")
+                            f.write(f"Flaeche RelDiff: {area_rel_diff:.4%}\n")
+                            f.write(f"Hausdorff: {hausdorff:.6f}\n")
+                            f.write(f"F-Score (1% BB): {fscore_val:.4f}\n")
+                        print(f"Mesh-Metriken gespeichert unter: {metrics_path}")
+                    
+                        # Plotten und speichern
+                        fig = plt.figure(figsize=(6, 6))
+                        ax = fig.add_subplot(111, projection='3d')
+                        ax.scatter(pts_gt[:, 0], pts_gt[:, 1], pts_gt[:, 2], s=1, c='blue', label='GT')
+                        ax.scatter(pts_pred_aligned[:, 0], pts_pred_aligned[:, 1], pts_pred_aligned[:, 2], s=1, c='red', label='Pred (aligned)')
+                        ax.set_title(f'{mesh_id}\nChamfer: {chamfer:.4f}')
+                        ax.legend()
+                        ax.axis('off')
+                        plt.tight_layout()
+                        plot_path = os.path.join(obj_out_dir, f"{mesh_id}_3d_compare.png")
+                        plt.savefig(plot_path, dpi=200)
+                        plt.close(fig)
+                        print(f"3D Vergleichsplot gespeichert unter: {plot_path}")
+                        print(f"Chamfer Distance zu GT-Mesh für {mesh_id}: {chamfer:.6f}")
+                    else:
+                        print(f"Kein GT-Mesh gefunden für {mesh_id} unter {gt_mesh_path}")
                     print("Mesh saved to", mesh_dir)
 
                 except Exception as e:
                     print("Failed to extract mesh:", str(e))
-                    
 
-
-
-
-                print("final psnr", total_psnr / cnt, "ssim", total_ssim / cnt)
+            print("final psnr", total_psnr / cnt, "ssim", total_ssim / cnt)
     
     
 if __name__ == "__main__":
