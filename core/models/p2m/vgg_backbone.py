@@ -1,10 +1,11 @@
 import torch
-from torch import nn
-from torch.nn import functional as F
+import torch.nn as nn
+import torch.nn.functional as F
 
-PRETRAINED_WEIGHTS_PATH = './notebooks/p2m/vgg.pth'
+PRETRAINED_WEIGHTS_PATH = "./notebooks/p2m/pretrained/vgg16-p2m.pth"
 
 class VGG16TensorflowAlign(nn.Module):
+
     def __init__(self, n_classes_input=3):
         super(VGG16TensorflowAlign, self).__init__()
 
@@ -102,7 +103,8 @@ class VGG16P2M(nn.Module):
         self.conv5_3 = nn.Conv2d(512, 512, 3, stride=1, padding=1)
         self.conv5_4 = nn.Conv2d(512, 512, 3, stride=1, padding=1)
 
-        if "vgg16p2m" in PRETRAINED_WEIGHTS_PATH and pretrained:
+        if "vgg16-p2m" in PRETRAINED_WEIGHTS_PATH and pretrained:
+            print("Loading VGG16-P2M pretrained weights...")
             state_dict = torch.load(PRETRAINED_WEIGHTS_PATH)
             self.load_state_dict(state_dict)
         else:

@@ -111,9 +111,9 @@ class P2MLoss(nn.Module):
 
             # Chamfer via knn_points
             knn1 = knn_points(gt_coord, P, K=1)
-            d1 = torch.sqrt(knn1.dists[...,0] + 1e-12)
+            d1 = knn1.dists[...,0]
             knn2 = knn_points(P, gt_coord, K=1)
-            d2 = torch.sqrt(knn2.dists[..., 0] + 1e-12)
+            d2 = knn2.dists[..., 0]
             idx2 = knn2.idx[...,   0]
 
             chamfer_loss += (
@@ -135,10 +135,10 @@ class P2MLoss(nn.Module):
 
         loss = (
               chamfer_loss
-            + img_loss     * self.options.weights.reconst
-            + lap_loss     * self.options.weights.laplace
-            + move_loss    * self.options.weights.move
-            + edge_loss    * self.options.weights.edge
+            #+ img_loss     * self.options.weights.reconst
+            #+ lap_loss     * self.options.weights.laplace
+            #+ move_loss    * self.options.weights.move
+            #+ edge_loss    * self.options.weights.edge
             + normal_loss  * self.options.weights.normal
         )
         loss = loss * self.options.weights.constant

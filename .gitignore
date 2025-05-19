@@ -39,3 +39,4 @@ wandb/
 
 .DS_Store
 
+notebooks/p2m/*

@@ -6,9 +6,10 @@ PRETRAINED_WEIGHTS_PATH = './notebooks/p2m/resnet.pth'
 def get_backbone(options):
     if options.backbone.startswith("vgg16"):
         if options.align_with_tensorflow:
-            nn_encoder = VGG16TensorflowAlign(n_classes_input=1)
+            nn_encoder = VGG16TensorflowAlign()
         else:
-            nn_encoder = VGG16P2M(pretrained="pretrained" in options.backbone, n_classes_input=1)
+            print("Loading vgg16-p2m...")
+            nn_encoder = VGG16P2M(pretrained=True)
         nn_decoder = VGG16Recons()
     elif options.backbone == "resnet50":
         nn_encoder = resnet50(backbone_ckpt=PRETRAINED_WEIGHTS_PATH, in_ch=3)

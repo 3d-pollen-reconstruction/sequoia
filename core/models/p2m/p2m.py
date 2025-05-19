@@ -21,11 +21,11 @@ class P2MModel(nn.Module):
 
         self.gcns = nn.ModuleList([
             GBottleneck(6, self.features_dim, self.hidden_dim, self.coord_dim,
-                        ellipsoid.adj_mat[0], activation=True),
+                        ellipsoid.adj_mat[0], activation=self.gconv_activation),
             GBottleneck(6, self.features_dim + self.hidden_dim, self.hidden_dim, self.coord_dim,
-                        ellipsoid.adj_mat[1], activation=True),
+                        ellipsoid.adj_mat[1], activation=self.gconv_activation),
             GBottleneck(6, self.features_dim + self.hidden_dim, self.hidden_dim, self.last_hidden_dim,
-                        ellipsoid.adj_mat[2], activation=True)
+                        ellipsoid.adj_mat[2], activation=self.gconv_activation)
         ])
 
         self.unpooling = nn.ModuleList([
@@ -43,10 +43,6 @@ class P2MModel(nn.Module):
         self.gconv = GConv(in_features=self.last_hidden_dim, out_features=self.coord_dim,
                            adj_mat=ellipsoid.adj_mat[2])
 
-    def _apply_offset(self, base, delta, scale=0.1):
-        """Pixel2Mesh style vertex update"""
-        return base + scale * delta          # scale is the ‘σ’ in the paper (≈0.1)
-    
     def forward(self, img):
         batch_size = img.size(0)
         img_feats = self.nn_encoder(img)
