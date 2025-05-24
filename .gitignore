@@ -37,6 +37,8 @@ wandb/
 
 .DS_Store
 
+!requirements.txt
+
 
 Vanilla_Nerf/*.txt
 Vanilla_Nerf/data/*
