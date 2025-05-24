@@ -579,6 +579,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dotmap"
+version = "1.3.30"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/68/c186606e4f2bf731abd18044ea201e70c3c244bf468f41368820d197fca5/dotmap-1.3.30.tar.gz", hash = "sha256:5821a7933f075fb47563417c0e92e0b7c031158b4c9a6a7e56163479b658b368", size = 12391 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/f9/976d6813c160d6c89196d81e9466dca1503d20e609d8751f3536daf37ec6/dotmap-1.3.30-py3-none-any.whl", hash = "sha256:bd9fa15286ea2ad899a4d1dc2445ed85a1ae884a42effb87c89a6ecce71243c6", size = 11464 },
+]
+
+[[package]]
 name = "executing"
 version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -934,6 +943,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f2/97/ebf4da567aa6827c909642694d71c9fcf53e5b504f2d96afea02718862f3/iniconfig-2.1.0.tar.gz", hash = "sha256:3abbd2e30b36733fee78f9c7f7308f2d0050e88f0087fd25c2645f63c773e1c7", size = 4793 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2c/e1/e6716421ea10d38022b952c159d5161ca1193197fb744506875fbb87ea7b/iniconfig-2.1.0-py3-none-any.whl", hash = "sha256:9deba5723312380e77435581c6bf4935c94cbfab9b1ed33ef8d238ea168eb760", size = 6050 },
+]
+
+[[package]]
+name = "ipdb"
+version = "0.13.13"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "decorator" },
+    { name = "ipython" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/1b/7e07e7b752017f7693a0f4d41c13e5ca29ce8cbcfdcc1fd6c4ad8c0a27a0/ipdb-0.13.13.tar.gz", hash = "sha256:e3ac6018ef05126d442af680aad863006ec19d02290561ac88b8b1c0b0cfc726", size = 17042 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/4c/b075da0092003d9a55cf2ecc1cae9384a1ca4f650d51b00fc59875fe76f6/ipdb-0.13.13-py3-none-any.whl", hash = "sha256:45529994741c4ab6d2388bfa5d7b725c2cf7fe9deffabdb8a6113aa5ed449ed4", size = 12130 },
 ]
 
 [[package]]
@@ -2581,6 +2603,17 @@ wheels = [
 ]
 
 [[package]]
+name = "pyhocon"
+version = "0.3.61"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyparsing" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/39/2d/cd65dc4fa8c901e6d02b4074771ced04828d71af18b97da24ed1e55507d7/pyhocon-0.3.61-py3-none-any.whl", hash = "sha256:73d0f064af9a7d454949c5557284ce1d716cfd8e1383ecc90095fc575d278df0", size = 25049 },
+]
+
+[[package]]
 name = "pymcubes"
 version = "0.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -3257,8 +3290,10 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "dotenv" },
+    { name = "dotmap" },
     { name = "fast-simplification" },
     { name = "hydra-core" },
+    { name = "ipdb" },
     { name = "ipykernel" },
     { name = "ipytest" },
     { name = "ipyvtklink" },
@@ -3278,6 +3313,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pip" },
     { name = "pyglet" },
+    { name = "pyhocon" },
     { name = "pymcubes" },
     { name = "pymeshlab" },
     { name = "pyntcloud" },
@@ -3310,8 +3346,10 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "dotenv", specifier = ">=0.9.9" },
+    { name = "dotmap", specifier = ">=1.3.30" },
     { name = "fast-simplification", specifier = ">=0.1.9" },
     { name = "hydra-core", specifier = ">=1.3.2" },
+    { name = "ipdb", specifier = ">=0.13.13" },
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "ipytest", specifier = ">=0.14.2" },
     { name = "ipyvtklink", specifier = ">=0.2.2" },
@@ -3331,6 +3369,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pip", specifier = ">=25.0.1" },
     { name = "pyglet", specifier = "<2" },
+    { name = "pyhocon", specifier = ">=0.3.61" },
     { name = "pymcubes", specifier = ">=0.1.6" },
     { name = "pymeshlab", specifier = "==2023.12.post2" },
     { name = "pyntcloud", specifier = ">=0.3.1" },

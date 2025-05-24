@@ -37,9 +37,16 @@ wandb/
 
 .DS_Store
 
+!requirements.txt
+!Pixel_Nerf/requirements.txt
 
 Vanilla_Nerf/*.txt
-Vanilla_Nerf/2D_Pollen/*
+Vanilla_Nerf/data/*
 Pixel_NeRF/*.txt
 Pixel_NeRF/pollen/*.png
 Pixel_NeRF/pollen/*.txt
+*.png
+Pixel_Nerf/pollen.zip
+Pixel_Nerf/pollen_128/
+Pixel_Nerf/readme-img/paper_teaser.jpg
+Pixel_Nerf/readme-img/paper_teaser.jpg

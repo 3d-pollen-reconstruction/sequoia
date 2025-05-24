@@ -15,8 +15,8 @@ def transparent_to_white(input_path: str, output_path: str):
     flattened.convert("RGB").save(output_path, "PNG")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python transparent_to_white.py input.png output.png")
-        sys.exit(1)
 
-    transparent_to_white(sys.argv[1], sys.argv[2])
+    print("Usage: python transparent_to_white.py input.png output.png")
+ 
+    transparent_to_white("./input/000001.png", "./input/norm_000001.png")
+    print("Converted image saved as output.png")

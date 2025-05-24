@@ -6,7 +6,6 @@ from mesh_processor import MeshProcessor
 from pointcloud_generator import PointCloudGenerator
 from mesh_repairer import MeshRepairer
 from voxel_generator import VoxelGenerator
-from multi_image_generator import NeRFDatasetGenerator
 
 
 logging.basicConfig(level=logging.INFO)
@@ -30,9 +29,6 @@ class Pipeline:
         self.voxel_generator = VoxelGenerator(
             raw_mesh_dir=raw_mesh_dir, output_dir=output_dir
         )
-        self.multi_view_generator = NeRFDatasetGenerator(
-            raw_mesh_dir=raw_mesh_dir, output_dir="nerf_views", num_views=16
-        )
 
         self.raw_mesh_dir = raw_mesh_dir
         self.output_dir = output_dir
@@ -41,6 +37,7 @@ class Pipeline:
 
     def _load_meshes(self):
         files = os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir)
+        print(f"Loading meshes from {files}")
         self.raw_meshes = [f for f in os.listdir(files) if f.lower().endswith(".stl")]
         self.processed_meshes = [
             f
@@ -57,7 +54,6 @@ class Pipeline:
         self._load_meshes()
         self.mesh_repairer.process(self.raw_meshes)
         self.image_generator.process(self.raw_meshes)
-        self.multi_view_generator.process(self.raw_meshes)
         self.mesh_processor.process(self.raw_meshes)
         self.voxel_generator.process(self.raw_meshes)
         self.pointcloud_generator.process(self.raw_meshes)

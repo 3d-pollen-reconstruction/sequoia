@@ -3,14 +3,15 @@
 
 import sys
 import os
+import wandb
+import matplotlib.pyplot as plt
+import imageio
 import multiprocessing
-from huggingface_hub import upload_folder
 import datetime
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
 from dotenv import load_dotenv
-
 import warnings
 import trainlib
 from model import make_model, loss
@@ -33,14 +34,18 @@ load_dotenv()  # loads .env into os.environ
 
 def extra_args(parser):
     parser.add_argument(
-        "--batch_size", "-B", type=int, default=8, help="Object batch size ('SB')"
+        "--batch_size", "-B", type=int, default=4, help="Object batch size ('SB')"
     )
     parser.add_argument(
         "--nviews",
         "-V",
         type=str,
-        default="1",
+        default="2",
         help="Number of source views (multiview); put multiple (space delim) to pick randomly per batch ('NV')",
+    )
+    parser.add_argument(
+            "--gamma_delay", type=int, default=0,
+            help="Number of scheduler.step() calls to wait before applying gamma decay"
     )
     parser.add_argument(
         "--freeze_enc",
@@ -64,7 +69,7 @@ def extra_args(parser):
     return parser
 
 
-args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
+args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=256)
 
 device = util.get_cuda(args.gpu_id[0])
 print("Using device", device)
@@ -74,6 +79,7 @@ print(
 )
 
 net = make_model(conf["model"]).to(device=device)
+print(conf["model"])
 net.stop_encoder_grad = args.freeze_enc
 if args.freeze_enc:
     print("Encoder frozen")
@@ -127,7 +133,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
     def extra_save_state(self):
         # Save renderer state as before
         torch.save(renderer.state_dict(), self.renderer_state_path)
-        print(f"Saved renderer state to {self.renderer_state_path}")
+        """ print(f"Saved renderer state to {self.renderer_state_path}")
         # Calculate current epoch based on _iter file and dataset size
         try:
             iter_path = os.path.join(self.args.checkpoints_path, self.args.name, "_iter")
@@ -171,7 +177,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
                 f.write(str(epoch))
             print(f"[HF Upload] ✅ Epoch {epoch} uploaded.")
         except Exception as e:
-            print(f"[HF Upload] ❌ Failed to upload: {e}")
+            print(f"[HF Upload] ❌ Failed to upload: {e}") """
 
     def calc_losses(self, data, is_train=True, global_step=0):
         if "images" not in data:
@@ -277,12 +283,17 @@ class PixelNeRFTrainer(trainlib.Trainer):
         return loss_dict
 
     def train_step(self, data, global_step):
-        return self.calc_losses(data, is_train=True, global_step=global_step)
+        loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
+        # Log all training metrics to wandb
+        wandb.log({f"train/{k}": v for k, v in loss_dict.items()}, step=global_step)
+        return loss_dict
 
     def eval_step(self, data, global_step):
         renderer.eval()
         losses = self.calc_losses(data, is_train=False, global_step=global_step)
         renderer.train()
+        # Log all evaluation metrics to wandb
+        wandb.log({f"val/{k}": v for k, v in losses.items()}, step=global_step)
         return losses
 
     def vis_step(self, data, global_step, idx=None):
@@ -393,14 +404,70 @@ class PixelNeRFTrainer(trainlib.Trainer):
         psnr = util.psnr(rgb_psnr, gt)
         vals = {"psnr": psnr}
         print("psnr", psnr)
+        
+        debug_outdir = os.path.join(self.args.checkpoints_path, self.args.name, "vis_debug")
+        os.makedirs(debug_outdir, exist_ok=True)
+        
+
+        step_str = f"{global_step:06d}"
+        imageio.imwrite(os.path.join(debug_outdir, f"rgb_{step_str}.png"), (rgb_psnr * 255).astype(np.uint8))
+        imageio.imwrite(os.path.join(debug_outdir, f"alpha_{step_str}.png"), (alpha_fine_np * 255).astype(np.uint8))
+        imageio.imwrite(os.path.join(debug_outdir, f"depth_{step_str}.png"), (depth_fine_np / np.max(depth_fine_np + 1e-8) * 255).astype(np.uint8))
+
+        # === Optional: visualize central density slice ===
+        try:
+            res = 256
+            grid = torch.linspace(-0.5, 0.5, res, device=device)
+            xs, ys, zs = torch.meshgrid(grid, grid, grid, indexing='ij')
+            pts = torch.stack([xs, ys, zs], -1).reshape(-1, 3)
+
+            sigma_vals = []
+            for i in range(0, pts.shape[0], 65536):
+                p = pts[i:i+65536]
+                viewdirs = torch.zeros((1, p.shape[0], 3), device=device)
+                out = net(p[None], coarse=True, viewdirs=viewdirs)
+                sigma_vals.append(out[0, :, 3])
+
+            sigma = torch.cat(sigma_vals).relu().view(res, res, res).cpu().numpy()
+            central_slice = sigma[res // 2]
+            plt.imshow(central_slice, cmap='inferno')
+            plt.colorbar()
+            plt.title("Central Sigma Slice (Z-axis)")
+            plt.savefig(os.path.join(debug_outdir, f"sigma_zslice_{step_str}.png"))
+            plt.close()
+        except Exception as e:
+            print(f"⚠️ Failed to compute sigma slice: {e}")
 
         # set the renderer network back to train mode
         renderer.train()
+        wandb.log({
+            "vis/rgb": wandb.Image((rgb_psnr * 255).astype(np.uint8), caption="RGB Prediction"),
+            "vis/alpha": wandb.Image((alpha_fine_np * 255).astype(np.uint8), caption="Alpha"),
+            "vis/depth": wandb.Image((depth_fine_np / np.max(depth_fine_np + 1e-8) * 255).astype(np.uint8), caption="Depth"),
+            "vis/psnr": psnr,
+        }, step=global_step)
+        wandb.log({
+            "vis/combined": wandb.Image(vis, caption="Combined Visualization"),
+        }, step=global_step)
+        # wandb log central density slice
+        if 'sigma' in locals():
+            wandb.log({
+                "vis/sigma_slice": wandb.Image(central_slice, caption="Central Sigma Slice (Z-axis)"),
+            }, step=global_step)
+
+            
         return vis, vals
 
 
 def main():
     # parse args, set device, build datasets, net, renderer, etc.
+    wandb.init(
+    entity="sequoia-bat",         # Your wandb team/user
+    project="PixelNerf",          # Project name
+    group="Projects",             # Optional: group name
+    name=args.name if hasattr(args, "name") else None,  # Run name
+    config=vars(args) if hasattr(args, "__dict__") else None
+)
     trainer = PixelNeRFTrainer()
     trainer.start()
 
