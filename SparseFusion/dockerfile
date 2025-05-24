@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y \
     libcrypt-dev \
     libpthread-stubs0-dev \
     libc6-dev \
+    nvidia-cuda-toolkit \
     && rm -rf /var/lib/apt/lists/*
 
 # Symlink pthread manually (fallback for bad linker paths)

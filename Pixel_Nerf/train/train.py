@@ -73,7 +73,10 @@ args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_s
 
 device = util.get_cuda(args.gpu_id[0])
 print("Using device", device)
-dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
+print(conf)
+dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir, image_size=[conf["model"]["img_sidelength"],conf["model"]["img_sidelength"]], training=True)
+# print image dimensions
+print("Image size", dset.image_size)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )

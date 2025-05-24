@@ -13,7 +13,7 @@ class SRNDataset(torch.utils.data.Dataset):
     """
 
     def __init__(
-        self, datadir, stage="train", image_size=(128, 128), world_scale=1.0,
+        self, datadir, stage="train", image_size=(256, 256), world_scale=1.0,
     ):
         """
         :param stage train | val | test
