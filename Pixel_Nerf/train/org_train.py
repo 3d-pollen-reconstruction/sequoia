@@ -1,4 +1,3 @@
-
 # Training to a set of multiple objects (e.g. ShapeNet or DTU)
 # tensorboard logs available in logs/<expname>
 
@@ -26,6 +25,12 @@ def extra_args(parser):
         "--batch_size", "-B", type=int, default=4, help="Object batch size ('SB')"
     )
     parser.add_argument(
+        "--log_wandb",
+        action="store_true",
+        default=True,
+        help="Log to wandb",
+    )
+    parser.add_argument(
         "--nviews",
         "-V",
         type=str,
@@ -38,10 +43,12 @@ def extra_args(parser):
         default=None,
         help="Freeze encoder weights and only train MLP",
     )
-    
+
     parser.add_argument(
-            "--gamma_delay", type=int, default=0,
-            help="Number of scheduler.step() calls to wait before applying gamma decay"
+        "--gamma_delay",
+        type=int,
+        default=0,
+        help="Number of scheduler.step() calls to wait before applying gamma decay",
     )
 
     parser.add_argument(
@@ -62,6 +69,21 @@ def extra_args(parser):
 args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
 device = util.get_cuda(args.gpu_id[0])
 
+wandb = None
+# if wandb is enabled, initialize it
+if args.log_wandb:
+    import wandb
+
+    wandb.init(
+        entity="sequoia-bat",  # Your wandb team/user
+        project="PixelNerf",  # Project name
+        group="Projects",  # Optional: group name
+        name=args.name if hasattr(args, "name") else None,  # Run name
+        config=vars(args) if hasattr(args, "__dict__") else None,
+    )
+    print("WandB initialized")
+
+
 dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
@@ -73,9 +95,10 @@ if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
 
-renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
-    device=device
-)
+renderer = NeRFRenderer.from_conf(
+    conf["renderer"],
+    lindisp=dset.lindisp,
+).to(device=device)
 
 # Parallize
 render_par = renderer.bind_parallel(net, args.gpu_id).eval()
@@ -202,7 +225,12 @@ class PixelNeRFTrainer(trainlib.Trainer):
             c=all_c.to(device=device) if all_c is not None else None,
         )
 
-        render_dict = DotMap(render_par(all_rays, want_weights=True,))
+        render_dict = DotMap(
+            render_par(
+                all_rays,
+                want_weights=True,
+            )
+        )
         coarse = render_dict.coarse
         fine = render_dict.fine
         using_fine = len(fine) > 0
@@ -224,12 +252,27 @@ class PixelNeRFTrainer(trainlib.Trainer):
         return loss_dict
 
     def train_step(self, data, global_step):
-        return self.calc_losses(data, is_train=True, global_step=global_step)
+        loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
+        # Log all training metrics to wandb with unique keys
+        if args.log_wandb and wandb:
+            print("Logging to wandb")
+            wandb.log(
+                {f"train/{k}_{global_step}": v for k, v in loss_dict.items()},
+                step=global_step,
+            )
+        return loss_dict
 
     def eval_step(self, data, global_step):
         renderer.eval()
         losses = self.calc_losses(data, is_train=False, global_step=global_step)
         renderer.train()
+        # Log all evaluation metrics to wandb with unique keys
+        if args.log_wandb and wandb:
+            print("Logging to wandb")
+            wandb.log(
+                {f"val/{k}_{global_step}": v for k, v in losses.items()},
+                step=global_step,
+            )
         return losses
 
     def vis_step(self, data, global_step, idx=None):
@@ -343,8 +386,20 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         # set the renderer network back to train mode
         renderer.train()
+        if args.log_wandb and wandb:
+            print("Logging to wandb")
+            wandb.log(
+                {
+                    "vis": wandb.Image(vis, caption=f"Step {global_step}"),
+                    "psnr": psnr,
+                },
+                step=global_step,
+            )
         return vis, vals
 
 
 trainer = PixelNeRFTrainer()
 trainer.start()
+
+if args.log_wandb and wandb:
+    wandb.finish()

@@ -26,4 +26,5 @@ dependencies = [
     "tqdm>=4.67.1",
     "trimesh>=4.6.8",
     "vtk>=9.4.2",
+    "wandb>=0.19.11",
 ]
