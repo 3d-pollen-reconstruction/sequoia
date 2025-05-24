@@ -5,6 +5,7 @@ tensorboardX==2.6.2.2
 torch==1.11.0
 numpy==1.24.3
 pandas==1.5.3
+PyMCubes==0.1.4
 tqdm==4.67.1
 matplotlib==3.7.5
 rich==13.3.5
