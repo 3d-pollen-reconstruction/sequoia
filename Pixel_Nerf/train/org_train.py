@@ -18,7 +18,8 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from dotmap import DotMap
-import torch.cuda.amp
+    
+
 
 
 def extra_args(parser):
@@ -137,7 +138,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         self.z_far = dset.z_far
 
         self.use_bbox = args.no_bbox_step > 0
-        self.scaler = torch.cuda.amp.GradScaler()
+        self.scaler = torch.amp.GradScaler(device_type='cuda')
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
@@ -221,7 +222,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         all_bboxes = all_poses = all_images = None
 
         # Mixed precision forward and loss
-        with torch.cuda.amp.autocast(enabled=is_train):
+        with torch.amp.autocast(device_type='cuda', enabled=is_train):
             net.encode(
                 src_images,
                 src_poses,
@@ -259,11 +260,10 @@ class PixelNeRFTrainer(trainlib.Trainer):
     def train_step(self, data, global_step):
         self.optim.zero_grad()
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
-        # Log all training metrics to wandb with unique keys
         if args.log_wandb and wandb:
             print("Logging to wandb")
             wandb.log(
-                {f"train/{k}_{global_step}": v for k, v in loss_dict.items()},
+                {f"train/{k}": v for k, v in loss_dict.items()},
                 step=global_step,
             )
         self.scaler.step(self.optim)
@@ -274,11 +274,10 @@ class PixelNeRFTrainer(trainlib.Trainer):
         renderer.eval()
         losses = self.calc_losses(data, is_train=False, global_step=global_step)
         renderer.train()
-        # Log all evaluation metrics to wandb with unique keys
         if args.log_wandb and wandb:
             print("Logging to wandb")
             wandb.log(
-                {f"val/{k}_{global_step}": v for k, v in losses.items()},
+                {f"val/{k}": v for k, v in losses.items()},
                 step=global_step,
             )
         return losses
