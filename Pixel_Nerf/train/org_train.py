@@ -18,6 +18,7 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from dotmap import DotMap
+import torch.cuda.amp
 
 
 def extra_args(parser):
@@ -136,6 +137,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         self.z_far = dset.z_far
 
         self.use_bbox = args.no_bbox_step > 0
+        self.scaler = torch.cuda.amp.GradScaler()
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
@@ -218,40 +220,44 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         all_bboxes = all_poses = all_images = None
 
-        net.encode(
-            src_images,
-            src_poses,
-            all_focals.to(device=device),
-            c=all_c.to(device=device) if all_c is not None else None,
-        )
-
-        render_dict = DotMap(
-            render_par(
-                all_rays,
-                want_weights=True,
+        # Mixed precision forward and loss
+        with torch.cuda.amp.autocast(enabled=is_train):
+            net.encode(
+                src_images,
+                src_poses,
+                all_focals.to(device=device),
+                c=all_c.to(device=device) if all_c is not None else None,
             )
-        )
-        coarse = render_dict.coarse
-        fine = render_dict.fine
-        using_fine = len(fine) > 0
 
-        loss_dict = {}
+            render_dict = DotMap(
+                render_par(
+                    all_rays,
+                    want_weights=True,
+                )
+            )
+            coarse = render_dict.coarse
+            fine = render_dict.fine
+            using_fine = len(fine) > 0
 
-        rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt)
-        loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
-        if using_fine:
-            fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
-            rgb_loss = rgb_loss * self.lambda_coarse + fine_loss * self.lambda_fine
-            loss_dict["rf"] = fine_loss.item() * self.lambda_fine
+            loss_dict = {}
 
-        loss = rgb_loss
+            rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt)
+            loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
+            if using_fine:
+                fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
+                rgb_loss = rgb_loss * self.lambda_coarse + fine_loss * self.lambda_fine
+                loss_dict["rf"] = fine_loss.item() * self.lambda_fine
+
+            loss = rgb_loss
+
         if is_train:
-            loss.backward()
+            self.scaler.scale(loss).backward()
         loss_dict["t"] = loss.item()
 
         return loss_dict
 
     def train_step(self, data, global_step):
+        self.optim.zero_grad()
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
         # Log all training metrics to wandb with unique keys
         if args.log_wandb and wandb:
@@ -260,6 +266,8 @@ class PixelNeRFTrainer(trainlib.Trainer):
                 {f"train/{k}_{global_step}": v for k, v in loss_dict.items()},
                 step=global_step,
             )
+        self.scaler.step(self.optim)
+        self.scaler.update()
         return loss_dict
 
     def eval_step(self, data, global_step):

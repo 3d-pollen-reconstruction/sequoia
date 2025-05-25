@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y \
     libcrypt-dev \
     libpthread-stubs0-dev \
     libc6-dev \
-    nvidia-cuda-toolkit \
+    #nvidia-cuda-toolkit \
     && rm -rf /var/lib/apt/lists/*
 
 # Symlink pthread manually (fallback for bad linker paths)
@@ -84,9 +84,24 @@ RUN git clone https://github.com/3d-pollen-reconstruction/sequoia.git && \
     CPLUS_INCLUDE_PATH=${CPLUS_INCLUDE_PATH}:/opt/conda/envs/sparsefusion/include \
     pip install -r requirements.txt
 
-# Build extensions
-RUN pip install /sequoia/SparseFusion/external/gridencoder && \
-    pip install /sequoia/SparseFusion/raymarching
+RUN echo $PATH && \
+    which nvcc && \
+    nvcc --version
+
+# Find the real CUDA directory and link nvcc there
+RUN CUDA_REAL=$(readlink -f /usr/local/cuda) && \
+    mkdir -p $CUDA_REAL/bin && \
+    ln -sf $(which nvcc) $CUDA_REAL/bin/nvcc && \
+    echo "Symlink created in $CUDA_REAL/bin"
+# ...rest of the code...
+    
+RUN mkdir -p /usr/local/cuda/bin && \
+    ln -sf $(which nvcc) /usr/local/cuda/bin/nvcc && \
+    echo "Created symlink: $(ls -la /usr/local/cuda/bin/nvcc)" && \
+    cd /sequoia/SparseFusion/external/gridencoder && \
+    CUDA_HOME=/opt/conda/envs/sparsefusion python setup.py install && \
+    cd /sequoia/SparseFusion/raymarching && \
+    CUDA_HOME=/opt/conda/envs/sparsefusion python setup.py install
 
 # Set working directory
 WORKDIR /sequoia/SparseFusion
