@@ -1,6 +1,6 @@
 # Training to a set of multiple objects (e.g. ShapeNet or DTU)
 # tensorboard logs available in logs/<expname>
-
+import gc
 import sys
 import os
 import psutil, os
@@ -30,7 +30,7 @@ def extra_args(parser):
     parser.add_argument(
         "--log_wandb",
         action="store_true",
-        default=True,
+        default=False,
         help="Log to wandb",
     )
     parser.add_argument(
@@ -420,6 +420,8 @@ class PixelNeRFTrainer(trainlib.Trainer):
                 },
                 step=global_step,
             )
+        del images, poses, cam_rays, gt
+        gc.collect()
         return vis, vals
 
 
