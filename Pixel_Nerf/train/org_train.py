@@ -3,6 +3,7 @@
 
 import sys
 import os
+import psutil, os
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -150,6 +151,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         if "images" not in data:
             return {}
         all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
+        
 
         SB, NV, _, H, W = all_images.shape
         all_poses = data["poses"].to(device=device)  # (SB, NV, 4, 4)
@@ -207,11 +209,18 @@ class PixelNeRFTrainer(trainlib.Trainer):
                 device=device
             )  # (ray_batch_size, 8)
 
-            all_rgb_gt.append(rgb_gt)
-            all_rays.append(rays)
+            #all_rgb_gt.append(rgb_gt)
+            #all_rays.append(rays)
+            all_rgb_gt.append(rgb_gt.detach())
+            all_rays.append(rays.detach())
 
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
+        
+        # Explicitly delete to save RAM
+        del rays, rgb_gt, images, poses, cam_rays, rgb_gt_all
+        torch.cuda.empty_cache()
+
 
         image_ord = image_ord.to(device)
         src_images = util.batched_index_select_nd(
@@ -260,27 +269,36 @@ class PixelNeRFTrainer(trainlib.Trainer):
     def train_step(self, data, global_step):
         self.optim.zero_grad()
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
+
         if args.log_wandb and wandb:
             print("Logging to wandb")
             wandb.log(
                 {f"train/{k}": v for k, v in loss_dict.items()},
                 step=global_step,
             )
+
         self.scaler.step(self.optim)
         self.scaler.update()
+
+        # 🔍 Print memory usage after step
+        print(f"[TRAIN MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
+
         return loss_dict
 
     def eval_step(self, data, global_step):
         renderer.eval()
-        losses = self.calc_losses(data, is_train=False, global_step=global_step)
-        renderer.train()
-        if args.log_wandb and wandb:
-            print("Logging to wandb")
-            wandb.log(
-                {f"val/{k}": v for k, v in losses.items()},
-                step=global_step,
-            )
-        return losses
+        with torch.no_grad():
+            losses = self.calc_losses(data, is_train=False, global_step=global_step)
+            renderer.train()
+            if args.log_wandb and wandb:
+                print("Logging to wandb")
+                wandb.log(
+                    {f"val/{k}": v for k, v in losses.items()},
+                    step=global_step,
+                )
+            print(f"[MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
+
+            return losses
 
     def vis_step(self, data, global_step, idx=None):
         if "images" not in data:
