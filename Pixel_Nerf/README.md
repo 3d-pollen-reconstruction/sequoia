@@ -284,3 +284,12 @@ They are of the form
 Parts of the code were based on from kwea123's NeRF implementation: https://github.com/kwea123/nerf_pl.
 Some functions are borrowed from DVR https://github.com/autonomousvision/differentiable_volumetric_rendering
 and PIFu https://github.com/shunsukesaito/PIFu
+
+
+
+eval:
+python eval\eval_pollen.py --datadir pollen --output C:/Users/super/Documents\Github/sequoia/Pixel_Nerf/eval/reconstructed --source "0 1" --gen_meshes --include_src  --write_compare --mesh_thresh 5.0 --gen_video
+
+
+train:
+python .\train\train.py -n pollen -c ./conf/exp/pollen.conf -D pollen --gpu_id=0  --gamma 0.8 --gamma_delay 1000 --batch_size 2 --lr 0.0001 -V 2 --resume
