@@ -138,7 +138,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
         self.z_far = dset.z_far
 
         self.use_bbox = args.no_bbox_step > 0
-        self.scaler = torch.amp.GradScaler(device_type='cuda')
+        self.scaler = torch.amp.GradScaler()
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
