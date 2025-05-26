@@ -40,6 +40,12 @@ wandb/
 !requirements.txt
 !Pixel_Nerf/requirements.txt
 
+
+Pixel_Nerf/pollen/*
+
+
+
+
 Vanilla_Nerf/*.txt
 Vanilla_Nerf/data/*
 Pixel_NeRF/*.txt
