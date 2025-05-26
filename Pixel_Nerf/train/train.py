@@ -288,15 +288,18 @@ class PixelNeRFTrainer(trainlib.Trainer):
     def train_step(self, data, global_step):
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
         # Log all training metrics to wandb
-        wandb.log({f"train/{k}": v for k, v in loss_dict.items()}, step=global_step)
+        if global_step % 144 == 0:
+            wandb.log({f"train/{k}": v for k, v in loss_dict.items()}, step=global_step)
         return loss_dict
 
     def eval_step(self, data, global_step):
         renderer.eval()
         losses = self.calc_losses(data, is_train=False, global_step=global_step)
         renderer.train()
-        # Log all evaluation metrics to wandb
-        wandb.log({f"val/{k}": v for k, v in losses.items()}, step=global_step)
+        # Log all evaluation metrics to wa
+        # ndb
+        if global_step % 144 == 0:
+            wandb.log({f"val/{k}": v for k, v in losses.items()}, step=global_step)
         return losses
 
     def vis_step(self, data, global_step, idx=None):
@@ -443,20 +446,21 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         # set the renderer network back to train mode
         renderer.train()
-        wandb.log({
-            "vis/rgb": wandb.Image((rgb_psnr * 255).astype(np.uint8), caption="RGB Prediction"),
-            "vis/alpha": wandb.Image((alpha_fine_np * 255).astype(np.uint8), caption="Alpha"),
-            "vis/depth": wandb.Image((depth_fine_np / np.max(depth_fine_np + 1e-8) * 255).astype(np.uint8), caption="Depth"),
-            "vis/psnr": psnr,
-        }, step=global_step)
-        wandb.log({
-            "vis/combined": wandb.Image(vis, caption="Combined Visualization"),
-        }, step=global_step)
+        #wandb.log({
+        #    "vis/rgb": wandb.Image((rgb_psnr * 255).astype(np.uint8), caption="RGB Prediction"),
+        #    "vis/alpha": wandb.Image((alpha_fine_np * 255).astype(np.uint8), caption="Alpha"),
+        #    "vis/depth": wandb.Image((depth_fine_np / np.max(depth_fine_np + 1e-8) * 255).astype(np.uint8), caption="Depth"),
+        #    "vis/psnr": psnr,
+        #}, step=global_step)
+        #wandb.log({
+        #    "vis/combined": wandb.Image(vis, caption="Combined Visualization"),
+        #}, step=global_step)
         # wandb log central density slice
         if 'sigma' in locals():
-            wandb.log({
-                "vis/sigma_slice": wandb.Image(central_slice, caption="Central Sigma Slice (Z-axis)"),
-            }, step=global_step)
+            pass
+            #wandb.log({
+            #    "vis/sigma_slice": wandb.Image(central_slice, caption="Central Sigma Slice (Z-axis)"),
+            #}, step=global_step)
 
             
         return vis, vals
