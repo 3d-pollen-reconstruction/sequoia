@@ -42,6 +42,11 @@ wandb/
 
 
 Pixel_Nerf/pollen/*
+*/checkpoints/*
+
+*.jpg
+*.png
+*.gif
 
 
 
