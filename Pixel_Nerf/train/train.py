@@ -460,6 +460,13 @@ class PixelNeRFTrainer(trainlib.Trainer):
             #wandb.log({
             #    "vis/sigma_slice": wandb.Image(central_slice, caption="Central Sigma Slice (Z-axis)"),
             #}, step=global_step)
+            
+        # if alpha fine > 1.0 or alpha coarse > 1.0, print warning and exit program dont save checkpoint
+        if np.any(alpha_fine_np > 1.0) or np.any(alpha_coarse_np > 1.0):
+            warnings.warn(
+                "Alpha values greater than 1.0 detected, exiting program to prevent saving bad checkpoint."
+            )
+            sys.exit(1)
 
             
         return vis, vals
