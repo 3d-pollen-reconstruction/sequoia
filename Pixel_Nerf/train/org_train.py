@@ -1,9 +1,8 @@
 # Training to a set of multiple objects (e.g. ShapeNet or DTU)
 # tensorboard logs available in logs/<expname>
-import gc
+
 import sys
 import os
-import psutil, os
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -19,8 +18,6 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from dotmap import DotMap
-    
-
 
 
 def extra_args(parser):
@@ -28,22 +25,10 @@ def extra_args(parser):
         "--batch_size", "-B", type=int, default=4, help="Object batch size ('SB')"
     )
     parser.add_argument(
-        "--log_wandb",
-        action="store_true",
-        default=False,
-        help="Log to wandb",
-    )
-    parser.add_argument(
-        "--vis_logger",
-        action="store_true",
-        default=False,
-        help="Log visualizations to wandb",
-    )
-    parser.add_argument(
         "--nviews",
         "-V",
         type=str,
-        default="2",
+        default="1",
         help="Number of source views (multiview); put multiple (space delim) to pick randomly per batch ('NV')",
     )
     parser.add_argument(
@@ -51,13 +36,6 @@ def extra_args(parser):
         action="store_true",
         default=None,
         help="Freeze encoder weights and only train MLP",
-    )
-
-    parser.add_argument(
-        "--gamma_delay",
-        type=int,
-        default=0,
-        help="Number of scheduler.step() calls to wait before applying gamma decay",
     )
 
     parser.add_argument(
@@ -78,21 +56,6 @@ def extra_args(parser):
 args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
 device = util.get_cuda(args.gpu_id[0])
 
-wandb = None
-# if wandb is enabled, initialize it
-if args.log_wandb:
-    import wandb
-
-    wandb.init(
-        entity="sequoia-bat",  # Your wandb team/user
-        project="PixelNerf",  # Project name
-        group="Projects",  # Optional: group name
-        name=args.name if hasattr(args, "name") else None,  # Run name
-        config=vars(args) if hasattr(args, "__dict__") else None,
-    )
-    print("WandB initialized")
-
-
 dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
@@ -104,10 +67,9 @@ if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
 
-renderer = NeRFRenderer.from_conf(
-    conf["renderer"],
-    lindisp=dset.lindisp,
-).to(device=device)
+renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
+    device=device
+)
 
 # Parallize
 render_par = renderer.bind_parallel(net, args.gpu_id).eval()
@@ -145,7 +107,6 @@ class PixelNeRFTrainer(trainlib.Trainer):
         self.z_far = dset.z_far
 
         self.use_bbox = args.no_bbox_step > 0
-        self.scaler = torch.amp.GradScaler()
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
@@ -157,7 +118,6 @@ class PixelNeRFTrainer(trainlib.Trainer):
         if "images" not in data:
             return {}
         all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
-        
 
         SB, NV, _, H, W = all_images.shape
         all_poses = data["poses"].to(device=device)  # (SB, NV, 4, 4)
@@ -215,18 +175,11 @@ class PixelNeRFTrainer(trainlib.Trainer):
                 device=device
             )  # (ray_batch_size, 8)
 
-            #all_rgb_gt.append(rgb_gt)
-            #all_rays.append(rays)
-            all_rgb_gt.append(rgb_gt.detach())
-            all_rays.append(rays.detach())
+            all_rgb_gt.append(rgb_gt)
+            all_rays.append(rays)
 
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
-        
-        # Explicitly delete to save RAM
-        del rays, rgb_gt, images, poses, cam_rays, rgb_gt_all
-        torch.cuda.empty_cache()
-
 
         image_ord = image_ord.to(device)
         src_images = util.batched_index_select_nd(
@@ -236,74 +189,42 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         all_bboxes = all_poses = all_images = None
 
-        # Mixed precision forward and loss
-        with torch.amp.autocast(device_type='cuda', enabled=is_train):
-            net.encode(
-                src_images,
-                src_poses,
-                all_focals.to(device=device),
-                c=all_c.to(device=device) if all_c is not None else None,
-            )
+        net.encode(
+            src_images,
+            src_poses,
+            all_focals.to(device=device),
+            c=all_c.to(device=device) if all_c is not None else None,
+        )
 
-            render_dict = DotMap(
-                render_par(
-                    all_rays,
-                    want_weights=True,
-                )
-            )
-            coarse = render_dict.coarse
-            fine = render_dict.fine
-            using_fine = len(fine) > 0
+        render_dict = DotMap(render_par(all_rays, want_weights=True,))
+        coarse = render_dict.coarse
+        fine = render_dict.fine
+        using_fine = len(fine) > 0
 
-            loss_dict = {}
+        loss_dict = {}
 
-            rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt)
-            loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
-            if using_fine:
-                fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
-                rgb_loss = rgb_loss * self.lambda_coarse + fine_loss * self.lambda_fine
-                loss_dict["rf"] = fine_loss.item() * self.lambda_fine
+        rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt)
+        loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
+        if using_fine:
+            fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
+            rgb_loss = rgb_loss * self.lambda_coarse + fine_loss * self.lambda_fine
+            loss_dict["rf"] = fine_loss.item() * self.lambda_fine
 
-            loss = rgb_loss
-
+        loss = rgb_loss
         if is_train:
-            self.scaler.scale(loss).backward()
+            loss.backward()
         loss_dict["t"] = loss.item()
 
         return loss_dict
 
     def train_step(self, data, global_step):
-        self.optim.zero_grad()
-        loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
-
-        if args.log_wandb and wandb:
-            print("Logging to wandb")
-            if global_step % 100 == 0:
-                print(f"[TRAIN MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
-                wandb.log(
-                    {f"train/{k}": v for k, v in loss_dict.items()},
-                    step=global_step,
-                )
-
-        self.scaler.step(self.optim)
-        self.scaler.update()
-
-        return loss_dict
+        return self.calc_losses(data, is_train=True, global_step=global_step)
 
     def eval_step(self, data, global_step):
         renderer.eval()
-        with torch.no_grad():
-            losses = self.calc_losses(data, is_train=False, global_step=global_step)
-            renderer.train()
-            if args.log_wandb and wandb:
-                print("Logging to wandb")
-                if global_step % 100 == 0:
-                    print(f"[VAL MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
-                    wandb.log(
-                        {f"val/{k}": v for k, v in losses.items()},
-                        step=global_step,
-                    )
-            return losses
+        losses = self.calc_losses(data, is_train=False, global_step=global_step)
+        renderer.train()
+        return losses
 
     def vis_step(self, data, global_step, idx=None):
         if "images" not in data:
@@ -416,22 +337,8 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         # set the renderer network back to train mode
         renderer.train()
-        if args.log_wandb and wandb and args.vis_logger:
-            print("Logging to wandb")
-            wandb.log(
-                {
-                    "vis": wandb.Image(vis, caption=f"Step {global_step}"),
-                    "psnr": psnr,
-                },
-                step=global_step,
-            )
-        del images, poses, cam_rays, gt
-        gc.collect()
         return vis, vals
 
 
 trainer = PixelNeRFTrainer()
 trainer.start()
-
-if args.log_wandb and wandb:
-    wandb.finish()

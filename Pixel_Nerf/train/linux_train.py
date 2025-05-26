@@ -1,17 +1,14 @@
 # Training to a set of multiple objects (e.g. ShapeNet or DTU)
 # tensorboard logs available in logs/<expname>
-
+import gc
 import sys
 import os
-import wandb
-import matplotlib.pyplot as plt
-import imageio
-import multiprocessing
-import datetime
+import psutil, os
+
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
-from dotenv import load_dotenv
+
 import warnings
 import trainlib
 from model import make_model, loss
@@ -21,19 +18,26 @@ import util
 import numpy as np
 import torch.nn.functional as F
 import torch
-
-print("🚀 CUDA available:", torch.cuda.is_available())
-print("🧠 CUDA device count:", torch.cuda.device_count())
-print("📛 CUDA device name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "None")
-
-torch.autograd.set_detect_anomaly(True)
-
 from dotmap import DotMap
-warnings.filterwarnings('ignore', category=UserWarning)
+    
+
+
 
 def extra_args(parser):
     parser.add_argument(
         "--batch_size", "-B", type=int, default=4, help="Object batch size ('SB')"
+    )
+    parser.add_argument(
+        "--log_wandb",
+        action="store_true",
+        default=False,
+        help="Log to wandb",
+    )
+    parser.add_argument(
+        "--vis_logger",
+        action="store_true",
+        default=False,
+        help="Log visualizations to wandb",
     )
     parser.add_argument(
         "--nviews",
@@ -43,14 +47,17 @@ def extra_args(parser):
         help="Number of source views (multiview); put multiple (space delim) to pick randomly per batch ('NV')",
     )
     parser.add_argument(
-            "--gamma_delay", type=int, default=0,
-            help="Number of scheduler.step() calls to wait before applying gamma decay"
-    )
-    parser.add_argument(
         "--freeze_enc",
         action="store_true",
         default=None,
         help="Freeze encoder weights and only train MLP",
+    )
+
+    parser.add_argument(
+        "--gamma_delay",
+        type=int,
+        default=0,
+        help="Number of scheduler.step() calls to wait before applying gamma decay",
     )
 
     parser.add_argument(
@@ -68,28 +75,39 @@ def extra_args(parser):
     return parser
 
 
-args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=256)
-
+args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
 device = util.get_cuda(args.gpu_id[0])
-print("Using device", device)
-print(conf)
-dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir, image_size=[conf["model"]["img_sidelength"],conf["model"]["img_sidelength"]], training=True)
-# print image dimensions
-print("Image size", dset.image_size)
+
+wandb = None
+# if wandb is enabled, initialize it
+if args.log_wandb:
+    import wandb
+
+    wandb.init(
+        entity="sequoia-bat",  # Your wandb team/user
+        project="PixelNerf",  # Project name
+        group="Projects",  # Optional: group name
+        name=args.name if hasattr(args, "name") else None,  # Run name
+        config=vars(args) if hasattr(args, "__dict__") else None,
+    )
+    print("WandB initialized")
+
+
+dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )
 
 net = make_model(conf["model"]).to(device=device)
-print(conf["model"])
 net.stop_encoder_grad = args.freeze_enc
 if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
 
-renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
-    device=device
-)
+renderer = NeRFRenderer.from_conf(
+    conf["renderer"],
+    lindisp=dset.lindisp,
+).to(device=device)
 
 # Parallize
 render_par = renderer.bind_parallel(net, args.gpu_id).eval()
@@ -125,66 +143,21 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         self.z_near = dset.z_near
         self.z_far = dset.z_far
-        
 
         self.use_bbox = args.no_bbox_step > 0
+        self.scaler = torch.amp.GradScaler()
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
-        
+
     def extra_save_state(self):
-        # Save renderer state as before
         torch.save(renderer.state_dict(), self.renderer_state_path)
-        """ print(f"Saved renderer state to {self.renderer_state_path}")
-        # Calculate current epoch based on _iter file and dataset size
-        try:
-            iter_path = os.path.join(self.args.checkpoints_path, self.args.name, "_iter")
-            state = torch.load(iter_path)
-            global_step = state.get("iter", 0)
-            epoch = global_step // self.num_total_batches
-            print(f"[HF Upload] Current epoch: {epoch}")
-        except Exception as e:
-            print(f"[HF Upload] Could not determine epoch from _iter: {e}")
-            return
-
-        # Upload every 30 epochs
-        if epoch % 50 != 0 or epoch == 0:
-            return
-
-        # Prevent duplicate uploads
-        last_uploaded_path = os.path.join(self.args.checkpoints_path, self.args.name, "_last_hf_upload.txt")
-        if os.path.exists(last_uploaded_path):
-            try:
-                with open(last_uploaded_path, "r") as f:
-                    last = int(f.read().strip())
-                    if last == epoch:
-                        return
-            except:
-                pass  # fallback: continue upload
-
-        # Perform upload
-        ckpt_dir = os.path.join(self.args.checkpoints_path, self.args.name)
-        print(f"[HF Upload] Uploading checkpoint for epoch {epoch} from {ckpt_dir}...")
-
-        try:
-            upload_folder(
-                folder_path=ckpt_dir,
-                repo_id="Etiiir/PixelNerf_Pollen",
-                repo_type="model",
-                commit_message=f"Upload at epoch {epoch}",
-                path_in_repo=f"checkpoints/epoch_{epoch}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                token=os.environ.get("HF_TOKEN", None),
-            )
-            with open(last_uploaded_path, "w") as f:
-                f.write(str(epoch))
-            print(f"[HF Upload] ✅ Epoch {epoch} uploaded.")
-        except Exception as e:
-            print(f"[HF Upload] ❌ Failed to upload: {e}") """
 
     def calc_losses(self, data, is_train=True, global_step=0):
         if "images" not in data:
             return {}
         all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
+        
 
         SB, NV, _, H, W = all_images.shape
         all_poses = data["poses"].to(device=device)  # (SB, NV, 4, 4)
@@ -242,11 +215,18 @@ class PixelNeRFTrainer(trainlib.Trainer):
                 device=device
             )  # (ray_batch_size, 8)
 
-            all_rgb_gt.append(rgb_gt)
-            all_rays.append(rays)
+            #all_rgb_gt.append(rgb_gt)
+            #all_rays.append(rays)
+            all_rgb_gt.append(rgb_gt.detach())
+            all_rays.append(rays.detach())
 
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
+        
+        # Explicitly delete to save RAM
+        del rays, rgb_gt, images, poses, cam_rays, rgb_gt_all
+        torch.cuda.empty_cache()
+
 
         image_ord = image_ord.to(device)
         src_images = util.batched_index_select_nd(
@@ -256,50 +236,74 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         all_bboxes = all_poses = all_images = None
 
-        net.encode(
-            src_images,
-            src_poses,
-            all_focals.to(device=device),
-            c=all_c.to(device=device) if all_c is not None else None,
-        )
+        # Mixed precision forward and loss
+        with torch.amp.autocast(device_type='cuda', enabled=is_train):
+            net.encode(
+                src_images,
+                src_poses,
+                all_focals.to(device=device),
+                c=all_c.to(device=device) if all_c is not None else None,
+            )
 
-        render_dict = DotMap(render_par(all_rays, want_weights=True,))
-        coarse = render_dict.coarse
-        fine = render_dict.fine
-        using_fine = len(fine) > 0
+            render_dict = DotMap(
+                render_par(
+                    all_rays,
+                    want_weights=True,
+                )
+            )
+            coarse = render_dict.coarse
+            fine = render_dict.fine
+            using_fine = len(fine) > 0
 
-        loss_dict = {}
+            loss_dict = {}
 
-        rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt)
-        loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
-        if using_fine:
-            fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
-            rgb_loss = rgb_loss * self.lambda_coarse + fine_loss * self.lambda_fine
-            loss_dict["rf"] = fine_loss.item() * self.lambda_fine
+            rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt)
+            loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
+            if using_fine:
+                fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
+                rgb_loss = rgb_loss * self.lambda_coarse + fine_loss * self.lambda_fine
+                loss_dict["rf"] = fine_loss.item() * self.lambda_fine
 
-        loss = rgb_loss
+            loss = rgb_loss
+
         if is_train:
-            loss.backward()
+            self.scaler.scale(loss).backward()
         loss_dict["t"] = loss.item()
 
         return loss_dict
 
     def train_step(self, data, global_step):
+        self.optim.zero_grad()
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
-        # Log all training metrics to wandb
-        if global_step % 144 == 0:
-            wandb.log({f"train/{k}": v for k, v in loss_dict.items()}, step=global_step)
+
+        if args.log_wandb and wandb:
+            print("Logging to wandb")
+            if global_step % 100 == 0:
+                print(f"[TRAIN MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
+                wandb.log(
+                    {f"train/{k}": v for k, v in loss_dict.items()},
+                    step=global_step,
+                )
+
+        self.scaler.step(self.optim)
+        self.scaler.update()
+
         return loss_dict
 
     def eval_step(self, data, global_step):
         renderer.eval()
-        losses = self.calc_losses(data, is_train=False, global_step=global_step)
-        renderer.train()
-        # Log all evaluation metrics to wa
-        # ndb
-        if global_step % 144 == 0:
-            wandb.log({f"val/{k}": v for k, v in losses.items()}, step=global_step)
-        return losses
+        with torch.no_grad():
+            losses = self.calc_losses(data, is_train=False, global_step=global_step)
+            renderer.train()
+            if args.log_wandb and wandb:
+                print("Logging to wandb")
+                if global_step % 100 == 0:
+                    print(f"[VAL MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
+                    wandb.log(
+                        {f"val/{k}": v for k, v in losses.items()},
+                        step=global_step,
+                    )
+            return losses
 
     def vis_step(self, data, global_step, idx=None):
         if "images" not in data:
@@ -409,75 +413,25 @@ class PixelNeRFTrainer(trainlib.Trainer):
         psnr = util.psnr(rgb_psnr, gt)
         vals = {"psnr": psnr}
         print("psnr", psnr)
-        
-        debug_outdir = os.path.join(self.args.checkpoints_path, self.args.name, "vis_debug")
-        os.makedirs(debug_outdir, exist_ok=True)
-        
-
-        step_str = f"{global_step:06d}"
-        imageio.imwrite(os.path.join(debug_outdir, f"rgb_{step_str}.png"), (rgb_psnr * 255).astype(np.uint8))
-        imageio.imwrite(os.path.join(debug_outdir, f"alpha_{step_str}.png"), (alpha_fine_np * 255).astype(np.uint8))
-        imageio.imwrite(os.path.join(debug_outdir, f"depth_{step_str}.png"), (depth_fine_np / np.max(depth_fine_np + 1e-8) * 255).astype(np.uint8))
-
-        # === Optional: visualize central density slice ===
-        try:
-            res = 256
-            grid = torch.linspace(-0.5, 0.5, res, device=device)
-            xs, ys, zs = torch.meshgrid(grid, grid, grid, indexing='ij')
-            pts = torch.stack([xs, ys, zs], -1).reshape(-1, 3)
-
-            sigma_vals = []
-            for i in range(0, pts.shape[0], 65536):
-                p = pts[i:i+65536]
-                viewdirs = torch.zeros((1, p.shape[0], 3), device=device)
-                out = net(p[None], coarse=True, viewdirs=viewdirs)
-                sigma_vals.append(out[0, :, 3])
-
-            sigma = torch.cat(sigma_vals).relu().view(res, res, res).cpu().numpy()
-            central_slice = sigma[res // 2]
-            plt.imshow(central_slice, cmap='inferno')
-            plt.colorbar()
-            plt.title("Central Sigma Slice (Z-axis)")
-            plt.savefig(os.path.join(debug_outdir, f"sigma_zslice_{step_str}.png"))
-            plt.close()
-        except Exception as e:
-            print(f"⚠️ Failed to compute sigma slice: {e}")
 
         # set the renderer network back to train mode
         renderer.train()
-        #wandb.log({
-        #    "vis/rgb": wandb.Image((rgb_psnr * 255).astype(np.uint8), caption="RGB Prediction"),
-        #    "vis/alpha": wandb.Image((alpha_fine_np * 255).astype(np.uint8), caption="Alpha"),
-        #    "vis/depth": wandb.Image((depth_fine_np / np.max(depth_fine_np + 1e-8) * 255).astype(np.uint8), caption="Depth"),
-        #    "vis/psnr": psnr,
-        #}, step=global_step)
-        #wandb.log({
-        #    "vis/combined": wandb.Image(vis, caption="Combined Visualization"),
-        #}, step=global_step)
-        # wandb log central density slice
-        if 'sigma' in locals():
-            pass
-            #wandb.log({
-            #    "vis/sigma_slice": wandb.Image(central_slice, caption="Central Sigma Slice (Z-axis)"),
-            #}, step=global_step)
-
-            
+        if args.log_wandb and wandb and args.vis_logger:
+            print("Logging to wandb")
+            wandb.log(
+                {
+                    "vis": wandb.Image(vis, caption=f"Step {global_step}"),
+                    "psnr": psnr,
+                },
+                step=global_step,
+            )
+        del images, poses, cam_rays, gt
+        gc.collect()
         return vis, vals
 
 
-def main():
-    # parse args, set device, build datasets, net, renderer, etc.
-    wandb.init(
-    entity="sequoia-bat",         # Your wandb team/user
-    project="PixelNerf",          # Project name
-    group="Projects",             # Optional: group name
-    name=args.name if hasattr(args, "name") else None,  # Run name
-    config=vars(args) if hasattr(args, "__dict__") else None
-)
-    trainer = PixelNeRFTrainer()
-    trainer.start()
+trainer = PixelNeRFTrainer()
+trainer.start()
 
-if __name__ == "__main__":
-    # On Windows, enable freeze_support if needed:
-    multiprocessing.freeze_support()
-    main()
+if args.log_wandb and wandb:
+    wandb.finish()
