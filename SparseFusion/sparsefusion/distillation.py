@@ -8,7 +8,8 @@ import argparse
 import os
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-
+import mcubes
+import trimesh
 import torch
 import torch.nn.functional as F
 from pytorch3d.renderer import PerspectiveCameras
@@ -495,6 +496,29 @@ def distillation_loop(
     w_addr = f'{save_dir}/{seq_name}.pt'
     torch.save({'model_state_dict': ngp_network.state_dict()}, w_addr)
     print('input idx', input_idx)
+        # === Extract and save mesh ===
+    print("Extracting mesh via marching cubes...")
+
+    resolution = 256
+    bound = opt.bound
+    grid = ngp_network.density_grid.mean(0).reshape(resolution, resolution, resolution).detach().cpu().numpy()
+    threshold = opt.density_thresh if hasattr(opt, 'density_thresh') else 10
+
+    # Normalize voxel coordinates to world space
+    voxel_origin = -bound
+    voxel_size = (2 * bound) / resolution
+    verts, faces = mcubes.marching_cubes(grid, threshold)
+
+    # Transform verts to world space
+    verts = verts * voxel_size + voxel_origin
+
+    # Create and save mesh
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+    mesh_path = os.path.join(save_dir, 'meshes', f'{seq_name}.obj')
+    os.makedirs(os.path.dirname(mesh_path), exist_ok=True)
+    mesh.export(mesh_path)
+
+    print(f"Saved mesh to {mesh_path}")
 
 
 def get_default_torch_ngp_opt():
