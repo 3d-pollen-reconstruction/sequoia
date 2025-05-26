@@ -34,6 +34,12 @@ def extra_args(parser):
         help="Log to wandb",
     )
     parser.add_argument(
+        "--vis_logger",
+        action="store_true",
+        default=False,
+        help="Log visualizations to wandb",
+    )
+    parser.add_argument(
         "--nviews",
         "-V",
         type=str,
@@ -272,16 +278,15 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         if args.log_wandb and wandb:
             print("Logging to wandb")
-            wandb.log(
-                {f"train/{k}": v for k, v in loss_dict.items()},
-                step=global_step,
-            )
+            if global_step % 100 == 0:
+                print(f"[TRAIN MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
+                wandb.log(
+                    {f"train/{k}": v for k, v in loss_dict.items()},
+                    step=global_step,
+                )
 
         self.scaler.step(self.optim)
         self.scaler.update()
-
-        # 🔍 Print memory usage after step
-        print(f"[TRAIN MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
 
         return loss_dict
 
@@ -292,12 +297,12 @@ class PixelNeRFTrainer(trainlib.Trainer):
             renderer.train()
             if args.log_wandb and wandb:
                 print("Logging to wandb")
-                wandb.log(
-                    {f"val/{k}": v for k, v in losses.items()},
-                    step=global_step,
-                )
-            print(f"[MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
-
+                if global_step % 100 == 0:
+                    print(f"[VAL MEM] {psutil.Process(os.getpid()).memory_info().rss / 1e6:.1f} MB")
+                    wandb.log(
+                        {f"val/{k}": v for k, v in losses.items()},
+                        step=global_step,
+                    )
             return losses
 
     def vis_step(self, data, global_step, idx=None):
@@ -411,7 +416,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         # set the renderer network back to train mode
         renderer.train()
-        if args.log_wandb and wandb:
+        if args.log_wandb and wandb and args.vis_logger:
             print("Logging to wandb")
             wandb.log(
                 {
