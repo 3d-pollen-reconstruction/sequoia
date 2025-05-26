@@ -47,9 +47,3 @@ class MeshProcessor:
                 pv.save_meshio(mesh=simplified_mesh, filename=mesh_path)
         else:
             logger.info("Meshes have already been simplified.")
-            
-        interim_dir = os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir, "interim")
-        if os.path.exists(interim_dir):
-            for file in os.listdir(interim_dir):
-                os.remove(os.path.join(interim_dir, file))
-            os.rmdir(interim_dir)
