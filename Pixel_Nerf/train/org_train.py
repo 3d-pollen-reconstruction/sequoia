@@ -56,7 +56,9 @@ def extra_args(parser):
 args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
 device = util.get_cuda(args.gpu_id[0])
 
-dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
+dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir, image_size=[conf["model"]["img_sidelength"],conf["model"]["img_sidelength"]], training=True)
+# print image dimensions
+print("Image size", dset.image_size)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )
@@ -315,6 +317,8 @@ class PixelNeRFTrainer(trainlib.Trainer):
                     alpha_fine_np.min(), alpha_fine_np.max()
                 )
             )
+                
+                
             depth_fine_cmap = util.cmap(depth_fine_np) / 255
             alpha_fine_cmap = util.cmap(alpha_fine_np) / 255
             vis_list = [
@@ -334,6 +338,13 @@ class PixelNeRFTrainer(trainlib.Trainer):
         psnr = util.psnr(rgb_psnr, gt)
         vals = {"psnr": psnr}
         print("psnr", psnr)
+        
+        # if alpha fine > 1.0 or alpha coarse > 1.0, print warning and exit program dont save checkpoint
+        if np.any(alpha_fine_np > 1.0) or np.any(alpha_coarse_np > 1.0):
+            warnings.warn(
+                "Alpha values greater than 1.0 detected, exiting program to prevent saving bad checkpoint."
+            )
+            sys.exit(1)
 
         # set the renderer network back to train mode
         renderer.train()

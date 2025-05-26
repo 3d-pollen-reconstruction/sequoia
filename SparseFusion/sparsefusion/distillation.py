@@ -496,29 +496,41 @@ def distillation_loop(
     w_addr = f'{save_dir}/{seq_name}.pt'
     torch.save({'model_state_dict': ngp_network.state_dict()}, w_addr)
     print('input idx', input_idx)
-        # === Extract and save mesh ===
-    print("Extracting mesh via marching cubes...")
 
-    resolution = 256
+
+    print("Extracting mesh from density field...")
+
+    # Create a dense 3D grid of points
+    res = 256  # adjust if needed
     bound = opt.bound
-    grid = ngp_network.density_grid.mean(0).reshape(resolution, resolution, resolution).detach().cpu().numpy()
-    threshold = opt.density_thresh if hasattr(opt, 'density_thresh') else 10
+    xs = torch.linspace(-bound, bound, res)
+    ys = torch.linspace(-bound, bound, res)
+    zs = torch.linspace(-bound, bound, res)
+    grid = torch.stack(torch.meshgrid(xs, ys, zs, indexing='ij'), dim=-1)  # (res, res, res, 3)
+    grid = grid.reshape(-1, 3)
 
-    # Normalize voxel coordinates to world space
-    voxel_origin = -bound
-    voxel_size = (2 * bound) / resolution
-    verts, faces = mcubes.marching_cubes(grid, threshold)
+    # Query density in batches to avoid OOM
+    batch_size = 2**16 # 262144, adjust as needed for your GPU
+    density_list = []
+    with torch.no_grad():
+        for i in range(0, grid.shape[0], batch_size):
+            batch = grid[i:i+batch_size].cuda()
+            batch_dict = ngp_network.density(batch)
+            batch_density = batch_dict["sigma"].cpu()
+            density_list.append(batch_density)
+    density = torch.cat(density_list, dim=0).view(res, res, res).numpy()
 
-    # Transform verts to world space
-    verts = verts * voxel_size + voxel_origin
+    # Run Marching Cubes
+    vertices, triangles = mcubes.marching_cubes(density, opt.density_thresh)
 
-    # Create and save mesh
-    mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-    mesh_path = os.path.join(save_dir, 'meshes', f'{seq_name}.obj')
-    os.makedirs(os.path.dirname(mesh_path), exist_ok=True)
-    mesh.export(mesh_path)
+    # Normalize back to world space
+    vertices = vertices / (res - 1) * (2 * bound) - bound
 
-    print(f"Saved mesh to {mesh_path}")
+    # Save mesh
+    mesh = trimesh.Trimesh(vertices, triangles)
+    mesh.export(f"{save_dir}/mesh_{seq_name}.ply")
+    print(f"Mesh saved to {save_dir}/mesh_{seq_name}.ply")
+
 
 
 def get_default_torch_ngp_opt():
