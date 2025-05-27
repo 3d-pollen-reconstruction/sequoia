@@ -501,7 +501,7 @@ def distillation_loop(
     print("Extracting mesh from density field...")
 
     # Create a dense 3D grid of points
-    res = 256  # adjust if needed
+    res = 512 # adjust if needed
     bound = opt.bound
     xs = torch.linspace(-bound, bound, res)
     ys = torch.linspace(-bound, bound, res)
@@ -521,15 +521,29 @@ def distillation_loop(
     density = torch.cat(density_list, dim=0).view(res, res, res).numpy()
 
     # Run Marching Cubes
-    vertices, triangles = mcubes.marching_cubes(density, opt.density_thresh)
+    #vertices, triangles = mcubes.marching_cubes(density, 0.2)
+    
+    for thres in [0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 2.5]:
+        try:
+            vertices, triangles = mcubes.marching_cubes(density, thres)
+            print(f"Threshold {thres}: got {len(vertices)} vertices")
+            vertices = vertices / (res - 1) * (2 * bound) - bound
+
+            mesh = trimesh.Trimesh(vertices, triangles)
+            mesh_path = f"{save_dir}/mesh_{seq_name}_{thres}.ply"
+            mesh.export(mesh_path)
+            print(f"Mesh saved to {mesh_path}")
+
+        except Exception as e:
+            print(f"Threshold {thres} failed: {e}")
 
     # Normalize back to world space
-    vertices = vertices / (res - 1) * (2 * bound) - bound
+    #vertices = vertices / (res - 1) * (2 * bound) - bound
 
     # Save mesh
-    mesh = trimesh.Trimesh(vertices, triangles)
-    mesh.export(f"{save_dir}/mesh_{seq_name}.ply")
-    print(f"Mesh saved to {save_dir}/mesh_{seq_name}.ply")
+    #mesh = trimesh.Trimesh(vertices, triangles)
+    #mesh.export(f"{save_dir}/mesh_{seq_name}.ply")
+    #print(f"Mesh saved to {save_dir}/mesh_{seq_name}.ply")
 
 
 
