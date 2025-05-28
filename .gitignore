@@ -67,3 +67,10 @@ Pixel_Nerf/readme-img/paper_teaser.jpg
 *.glb
 SparseFusion/data/co3d_toy/apple/apple_toy.pt
 SparseFusion/output/demo/apple_000_c2.pt
+Pixel_Nerf/pollen_augmented/256_res.zip
+.gitignore
+Pixel_Nerf/pollen_augmented/256_res/pollen_train/17767_Common_knapweed_Centaurea_nigra_pollen_grain_asymmetry_1/intrinsics.txt
+
+Pixel_Nerf/pollen_augmented/256_res/*
+Pixel_Nerf/pollen_augmented/256_res/**
+*.bin
