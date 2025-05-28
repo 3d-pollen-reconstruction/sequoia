@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
     """Run a single train–val–test cycle and return validation & test metrics."""
+    
+    logger.info("Starting training with configuration:\n%s", OmegaConf.to_yaml(cfg))
+    
     # ---------------------------------------------------------------------
     # Seed everything for reproducibility
     # ---------------------------------------------------------------------
@@ -40,10 +43,11 @@ def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
     # ---------------------------------------------------------------------
     # Model & metrics
     # ---------------------------------------------------------------------
+    print(cfg.model, type(cfg.model))
     model = instantiate(cfg.model)
-    init_metrics(model, "train")
-    init_metrics(model, "val")
-    init_metrics(model, "test")
+    init_metrics("train", model)
+    init_metrics("val", model)
+    init_metrics("test", model)
 
     # ---------------------------------------------------------------------
     # WandB logger – flatten cfg for nicer UI
@@ -51,7 +55,7 @@ def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
     flat_cfg = OmegaConf.to_container(cfg, resolve=True)
     wandb_logger = WandbLogger(
         project="reconstruction",
-        name=cfg.experiment.name,
+        name=cfg.name,
         config=flat_cfg,
         reinit=False,
     )

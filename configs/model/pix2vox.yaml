@@ -1,1 +1,5 @@
 _target_: core.models.pix2vox.Pix2Vox
+lr: 1e-4
+pretrained: ./pretrained/Pix2Vox-A-ShapeNet.pth
+merger_kickin: 25
+refiner_kickin: 75

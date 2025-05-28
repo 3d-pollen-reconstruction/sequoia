@@ -43,8 +43,8 @@ def train_fold(
 
     model = instantiate(cfg.model)
     model.fold = fold
-    init_metrics(model, "train")
-    init_metrics(model, "val")
+    init_metrics("train", model)
+    init_metrics("val", model)
 
     trainer: pl.Trainer = instantiate(
         cfg.trainer,

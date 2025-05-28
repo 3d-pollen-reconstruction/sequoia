@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Dict, Any, Tuple
+import logging
 
 import torch
 import torch.nn as nn
@@ -10,6 +11,8 @@ from .decoder import Decoder
 from .merger  import Merger
 from .refiner import Refiner
 from metrics import batch_iou
+
+logger = logging.getLogger(__name__)
 
 
 def _strip_module_prefix(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -52,7 +55,7 @@ class Pix2Vox(pl.LightningModule):
             for key, module in parts.items():
                 if key in ckpt:
                     module.load_state_dict(_strip_module_prefix(ckpt[key]), strict=False)
-            self.print(f"[INFO] Loaded Pix2Vox weights from {pretrained}")
+            logger.info(f"Loaded Pix2Vox weights from {pretrained}")
 
     def _generate(
         self,

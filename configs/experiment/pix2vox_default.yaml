@@ -1,10 +1,9 @@
+# @package _global_
+
 name: pix2vox_default
-model:
-  _target_: models.pix2vox_lit.Pix2VoxLightningModule
-  lr: 1e-4
-  pretrained: "./pretrained/Pix2Vox-A-ShapeNet.pth"
-  merger_kickin: 25
-  refiner_kickin: 75
+
+defaults:
+  - override /model: pix2vox
 
 data:
   image_transforms:
@@ -12,11 +11,9 @@ data:
     transforms:
       - _target_: torchvision.transforms.Resize
         size: [224, 224]
+      - _target_: torchvision.transforms.Grayscale
+        num_output_channels: 3
       - _target_: torchvision.transforms.ToTensor
-      - _target_: torchvision.transforms.Lambda
-        lambd:
-          _target_: builtins.eval
-          expression: "lambda x: x.repeat(3, 1, 1)"
       - _target_: torchvision.transforms.Normalize
         mean: [0.5, 0.5, 0.5]
         std:  [0.5, 0.5, 0.5]

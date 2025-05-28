@@ -2,10 +2,10 @@
 
 defaults:
   - _self_
-  - model: visual_hull
   - data: default
   - trainer: default
-  - experiment: default
+  - model: visual_hull
+  - experiment: null
 
 ckpt_path: null
 

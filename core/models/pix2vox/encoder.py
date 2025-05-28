@@ -7,6 +7,7 @@
 
 import torch
 import torchvision.models
+from torchvision.models.vgg import VGG16_BN_Weights
 
 
 class Encoder(torch.nn.Module):
@@ -15,7 +16,7 @@ class Encoder(torch.nn.Module):
         self.cfg = cfg
 
         # Layer Definition
-        vgg16_bn = torchvision.models.vgg16_bn(pretrained=True)
+        vgg16_bn = torchvision.models.vgg16_bn(weights=VGG16_BN_Weights.DEFAULT)
         self.vgg = torch.nn.Sequential(*list(vgg16_bn.features.children()))[:27]
         self.layer1 = torch.nn.Sequential(
             torch.nn.Conv2d(512, 512, kernel_size=3),

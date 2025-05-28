@@ -1,2 +1,6 @@
+# @package _global_
+
+defaults:
+  - override /model: visual_hull
+
 name: default
-model: visual_hull
