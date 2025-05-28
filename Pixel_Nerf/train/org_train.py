@@ -3,6 +3,7 @@
 
 import sys
 import os
+import wandb
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -48,13 +49,22 @@ def extra_args(parser):
         "--fixed_test",
         action="store_true",
         default=None,
-        help="Freeze encoder weights and only train MLP",
+        help="Use fixed test set for evaluation (default: random sampling)",
     )
     return parser
 
 
 args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
 device = util.get_cuda(args.gpu_id[0])
+
+wandb.init(
+    project="PixelNerf",
+    entity="sequoia-bat",
+    name=args.name if hasattr(args, "name") else None,
+    config=conf.toDict() if hasattr(conf, "toDict") else dict(conf),
+    notes="Full config loaded from config file",
+    tags=["table"]
+)
 
 dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir, image_size=[conf["model"]["img_sidelength"],conf["model"]["img_sidelength"]], training=True)
 # print image dimensions
@@ -219,12 +229,24 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         return loss_dict
 
-    def train_step(self, data, global_step):
-        return self.calc_losses(data, is_train=True, global_step=global_step)
+    ##def train_step(self, data, global_step):
+    #    return self.calc_losses(data, is_train=True, global_step=global_step)
 
+    def train_step(self, data, global_step):
+        loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
+        wandb.log(loss_dict, step=global_step)
+        return loss_dict
+
+    #def eval_step(self, data, global_step):
+    #    renderer.eval()
+    #    losses = self.calc_losses(data, is_train=False, global_step=global_step)
+    #    renderer.train()
+    #    return losses
+    
     def eval_step(self, data, global_step):
         renderer.eval()
         losses = self.calc_losses(data, is_train=False, global_step=global_step)
+        wandb.log({f"val_{k}": v for k, v in losses.items()}, step=global_step)
         renderer.train()
         return losses
 
@@ -332,8 +354,27 @@ class PixelNeRFTrainer(trainlib.Trainer):
             vis_fine = np.hstack(vis_list)
             vis = np.vstack((vis_coarse, vis_fine))
             rgb_psnr = rgb_fine_np
+            wandb.log({
+            "psnr": util.psnr(rgb_fine_np, gt),
+            "c_rgb_min": float(rgb_coarse_np.min()),
+            "c_rgb_max": float(rgb_coarse_np.max()),
+            "c_alpha_min": float(alpha_coarse_np.min()),
+            "c_alpha_max": float(alpha_coarse_np.max()),
+            "f_rgb_min": float(rgb_fine_np.min()),
+            "f_rgb_max": float(rgb_fine_np.max()),
+            "f_alpha_min": float(alpha_fine_np.min()),
+            "f_alpha_max": float(alpha_fine_np.max()),
+        }, step=global_step)
         else:
             rgb_psnr = rgb_coarse_np
+            wandb.log({
+            "psnr": util.psnr(rgb_coarse_np, gt),
+            "c_rgb_min": float(rgb_coarse_np.min()),
+            "c_rgb_max": float(rgb_coarse_np.max()),
+            "c_alpha_min": float(alpha_coarse_np.min()),
+            "c_alpha_max": float(alpha_coarse_np.max()),
+        }, step=global_step)
+
 
         psnr = util.psnr(rgb_psnr, gt)
         vals = {"psnr": psnr}
