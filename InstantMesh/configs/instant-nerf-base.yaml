@@ -19,28 +19,3 @@ infer_config:
   mesh_threshold: 10.0
   mesh_resolution: 256
   render_resolution: 384
-
-
-data:
-  target: src.data.DataModuleFromConfig
-  params:
-    batch_size: 8
-    num_workers: 8
-    train:
-      target: src.data.datasets.PollenDataset
-      params:
-        root_dir: "pollen_train"
-        input_view_num: 6
-        target_view_num: 4
-        total_view_n: 50
-        fov: 50
-        camera_rotation: True
-    validation:
-      target: src.data.datasets.PollenDataset
-      params:
-        root_dir: "pollen_val"
-        input_view_num: 6
-        target_view_num: 4
-        total_view_n: 50
-        fov: 50
-        camera_rotation: False
