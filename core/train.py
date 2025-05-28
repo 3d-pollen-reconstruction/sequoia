@@ -3,66 +3,51 @@ import sys
 import os
 import logging
 import rootutils
-from collections import defaultdict
 from typing import Dict
+from omegaconf import DictConfig, OmegaConf
 import torch
 import lightning.pytorch as pl
-import lightning as L
-from omegaconf import DictConfig, OmegaConf
+from lightning.pytorch.loggers import WandbLogger
 from hydra.utils import instantiate
-from pytorch_lightning.loggers import WandbLogger
 import hydra
-import numpy as np
 
 from metrics import init_metrics
 
 sys.path.insert(0, os.getcwd())
 
-PROJECT_ROOT = rootutils.setup_root(
-    __file__, indicator=".project-root", pythonpath=True
-)
-
+PROJECT_ROOT = rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 CONFIG_ROOT = PROJECT_ROOT / "configs"
 
 logger = logging.getLogger(__name__)
 
-def train_fold(
-    cfg: DictConfig,
-    fold: int,
-    wandb_logger: WandbLogger
-) -> Dict[str, float]:
-    """
-    Run one fold: instantiate data, model, train, and return final metrics for that fold.
-    """
+
+def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
+    """Run a single train–val–test cycle and return validation & test metrics."""
+    # ---------------------------------------------------------------------
+    # Seed everything for reproducibility
+    # ---------------------------------------------------------------------
     if cfg.get("seed"):
         pl.seed_everything(cfg.seed, workers=True)
 
-    cfg.data.fold_idx = fold
+    # ---------------------------------------------------------------------
+    # DataModule ─ expects that `setup(stage)` creates the corresponding splits
+    #   stage="fit"  -> train + val
+    #   stage="test" -> test
+    # ---------------------------------------------------------------------
     datamodule = instantiate(cfg.data)
     datamodule.setup("fit")
 
+    # ---------------------------------------------------------------------
+    # Model & metrics
+    # ---------------------------------------------------------------------
     model = instantiate(cfg.model)
-    model.fold = fold
     init_metrics(model, "train")
     init_metrics(model, "val")
+    init_metrics(model, "test")
 
-    trainer: pl.Trainer = instantiate(
-        cfg.trainer,
-        logger=wandb_logger,
-        callbacks=instantiate(cfg.get("callbacks")),
-    )
-    
-    trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
-    train_results = trainer.callback_metrics
-
-    val_results = trainer.validate(model, datamodule=datamodule)[0]
-
-    torch.cuda.empty_cache()
-    gc.collect()
-    
-    return val_results 
-
-def run_cv(cfg: DictConfig) -> None:
+    # ---------------------------------------------------------------------
+    # WandB logger – flatten cfg for nicer UI
+    # ---------------------------------------------------------------------
     flat_cfg = OmegaConf.to_container(cfg, resolve=True)
     wandb_logger = WandbLogger(
         project="reconstruction",
@@ -70,38 +55,54 @@ def run_cv(cfg: DictConfig) -> None:
         config=flat_cfg,
         reinit=False,
     )
-    run = wandb_logger.experiment
-    run.define_metric("fold_*", step_metric="epoch")
 
-    metrics_across_folds: Dict[str, list[float]] = defaultdict(list)
+    # ---------------------------------------------------------------------
+    # Trainer
+    # ---------------------------------------------------------------------
+    trainer: pl.Trainer = instantiate(
+        cfg.trainer,
+        logger=wandb_logger,
+        callbacks=instantiate(cfg.get("callbacks")),
+    )
 
-    for fold in range(cfg.data.n_splits):
-        logger.info(f"Starting fold {fold}")
-        
-        fold_val_logs = train_fold(cfg, fold, wandb_logger)
-        
-        for key, value in fold_val_logs.items():
-            short = "/".join(key.split("/")[1:])
-            metrics_across_folds[short].append(value)
+    # ------------------------------------------------------------------
+    # Training
+    # ------------------------------------------------------------------
+    trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
+    val_metrics = trainer.callback_metrics  # from the last validation epoch
 
-        logger.info(f"Fold {fold} metrics: {fold_val_logs}")
+    # ------------------------------------------------------------------
+    # Testing (uses the best checkpoint by default if trainer.fit saved one)
+    # ------------------------------------------------------------------
+    datamodule.setup("test")
+    test_metrics = trainer.test(model, datamodule=datamodule)[0]
 
-    summary: Dict[str, float] = {}
-    for metric_name, values in metrics_across_folds.items():
-        arr = np.array(values, dtype=float)
-        mean, std = arr.mean(), arr.std(ddof=1)
-        summary[f"{metric_name}_mean"] = mean
-        summary[f"{metric_name}_std"]  = std
-        
-        run.summary[f"{metric_name}_mean"] = mean
-        run.summary[f"{metric_name}_std"]  = std
+    # Merge val & test metrics for convenience
+    results = {**val_metrics, **{f"test/{k}": v for k, v in test_metrics.items()}}
 
-    logger.info(f"CV Summary: {summary}")
-    run.finish()
+    # ------------------------------------------------------------------
+    # Clean‑up
+    # ------------------------------------------------------------------
+    torch.cuda.empty_cache()
+    gc.collect()
+
+    # ------------------------------------------------------------------
+    # Log a nice summary to WandB (this will appear in the run summary pane)
+    # ------------------------------------------------------------------
+    for key, val in results.items():
+        wandb_logger.experiment.summary[key] = val
+
+    wandb_logger.experiment.finish()
+
+    return results
+
 
 @hydra.main(config_path=str(CONFIG_ROOT), config_name="train", version_base="1.3")
 def main(cfg: DictConfig):
-    run_cv(cfg)
+    """Entry point launched by Hydra."""
+    metrics = train_and_evaluate(cfg)
+    logger.info("Final metrics (val + test): %s", metrics)
 
-if __name__ == "__main__":  
+
+if __name__ == "__main__":
     main()
