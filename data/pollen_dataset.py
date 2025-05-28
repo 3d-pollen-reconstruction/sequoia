@@ -1,13 +1,9 @@
 import os
-import json
-from pathlib import Path
 
 from dotenv import load_dotenv
 from PIL import Image
 import numpy as np
 import pandas as pd
-import trimesh
-from trimesh.transformations import euler_matrix, translation_matrix, scale_matrix
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
