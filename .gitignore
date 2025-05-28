@@ -74,3 +74,6 @@ Pixel_Nerf/pollen_augmented/256_res/pollen_train/17767_Common_knapweed_Centaurea
 Pixel_Nerf/pollen_augmented/256_res/*
 Pixel_Nerf/pollen_augmented/256_res/**
 *.bin
+InstantMesh/pollen/pollen_train/*
+
+InstantMesh/pollen/*
