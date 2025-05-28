@@ -137,22 +137,47 @@ class BlenderInterface():
         scene.render.layers["RenderLayer"].use_pass_normal = True
         scene.render.layers["RenderLayer"].use_pass_z = True
 
+        # === DEPTH normalization ===
+        depth_map_range = tree.nodes.new(type='CompositorNodeMapRange')
+        depth_map_range.name = 'depth_map_range'
+        depth_map_range.inputs['From Min'].default_value = 0.1  # placeholder; dynamically updated in loop
+        depth_map_range.inputs['From Max'].default_value = 3.0  # placeholder; dynamically updated in loop
+        depth_map_range.inputs['To Min'].default_value = 0.0
+        depth_map_range.inputs['To Max'].default_value = 1.0
+
         depth_output = tree.nodes.new(type='CompositorNodeOutputFile')
         depth_output.label = 'Depth Output'
         depth_output.name = 'depth_output'
         depth_output.base_path = os.path.join(output_dir, "depth")
-        depth_output.format.file_format = 'OPEN_EXR'
-        tree.links.new(rlayers.outputs['Depth'], depth_output.inputs[0])
+        depth_output.format.file_format = 'PNG'
+        depth_output.format.color_depth = '16'
+        depth_output.format.color_mode = 'BW'
+
+        tree.links.new(rlayers.outputs['Depth'], depth_map_range.inputs[0])
+        tree.links.new(depth_map_range.outputs[0], depth_output.inputs[0])
+
+    
 
         normal_output = tree.nodes.new(type='CompositorNodeOutputFile')
         normal_output.label = 'Normal Output'
         normal_output.name = 'normal_output'
         normal_output.base_path = os.path.join(output_dir, "normal")
-        normal_output.format.file_format = 'OPEN_EXR'
+        normal_output.format.file_format = 'PNG'
         tree.links.new(rlayers.outputs['Normal'], normal_output.inputs[0])
         cam_poses = []
         for i, mat in enumerate(blender_cam2world_matrices):
             self.camera.matrix_world = mat
+            
+            # Compute dynamic near/far for this specific view
+            cam_loc = mat.to_translation()
+            dist = (cam_loc - Vector((0.0, 0.0, 0.0))).length
+            near = max(0.1, dist - object_radius)
+            far = dist + object_radius
+
+            # Update depth normalization range in Map Range node
+            tree.nodes['depth_map_range'].inputs['From Min'].default_value = near
+            tree.nodes['depth_map_range'].inputs['From Max'].default_value = far
+
 
             if os.path.exists(os.path.join(img_dir, '%06d.png' % i)):
                 continue
@@ -169,9 +194,13 @@ class BlenderInterface():
             if write_cam_params:
                 RT = util.get_world2cam_from_blender_cam(self.camera)
                 cam2world = RT.inverted()
-                with open(os.path.join(pose_dir, '%06d.txt' % i), 'w') as pose_file:
-                    matrix_flat = [cam2world[j][k] for j in range(4) for k in range(4)]
-                    pose_file.write(' '.join(map(str, matrix_flat)) + '\n')
+                # Save both for .npz and optionally .txt
+                cam_poses.append(np.array(cam2world))
+
+                if write_cam_params:
+                    with open(os.path.join(pose_dir, '%06d.txt' % i), 'w') as pose_file:
+                        matrix_flat = [cam2world[j][k] for j in range(4) for k in range(4)]
+                        pose_file.write(' '.join(map(str, matrix_flat)) + '\n')
         
         np.savez(os.path.join(output_dir, 'cameras.npz'), cam_poses=np.stack(cam_poses, axis=0))
 
