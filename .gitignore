@@ -13,6 +13,8 @@
 */.gitlab*
 */.github
 
+Pixel_NeRF/pollen_augmented/*
+
 .venv
 __pycache__/
 .env
