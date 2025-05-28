@@ -13,7 +13,7 @@
 
 # Load any required modules (optional)
 # module load singularity
-export WANDB_API_KEY=57ec91b771b38d635cbbcf795a35d72a0c9c85cc
+export WANDB_API_KEY=YOUR_WANDB_API_KEY_HERE
 # Run the training inside Singularity
 singularity exec --nv \
   --bind /home2/etienne.roulet/checkpoints:/container/checkpoints \
