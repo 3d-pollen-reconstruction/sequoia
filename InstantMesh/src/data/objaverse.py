@@ -3,7 +3,7 @@ import math
 import json
 import importlib
 from pathlib import Path
-
+import imageio
 import cv2
 import random
 import numpy as np
@@ -70,6 +70,24 @@ class DataModuleFromConfig(pl.LightningDataModule):
 
         return wds.WebLoader(self.datasets['test'], batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False)
 
+from torch.utils.data import Dataset
+from pathlib import Path
+
+class PollenMultiObjectDataset(Dataset):
+    def __init__(self, root_dir, **kwargs):
+        self.root_dir = Path(root_dir)
+        self.object_dirs = sorted([d for d in self.root_dir.iterdir() if d.is_dir()])
+        self.kwargs = kwargs
+
+    def __len__(self):
+        return len(self.object_dirs)
+
+    def __getitem__(self, idx):
+        from .objaverse import PollenDataset  # or wherever PollenDataset is defined
+        obj_dir = self.object_dirs[idx]
+        dataset = PollenDataset(obj_dir, **self.kwargs)
+        return dataset[0]  # or sample randomly, or return the dataset itself
+
 class PollenDataset(Dataset):
     def __init__(self, root_dir, input_view_num=6, target_view_num=4, total_view_n=50, fov=50, camera_rotation=True):
         self.root_dir = Path(root_dir)
@@ -101,21 +119,39 @@ class PollenDataset(Dataset):
         rgb = rgb * alpha + (1 - alpha) * np.array(bg_color)
         return torch.from_numpy(rgb.transpose(2, 0, 1)).float(), torch.from_numpy(alpha.transpose(2, 0, 1)).float()
 
+   
+
+                # ...existing code...
+        
     def __getitem__(self, index):
         idxs = np.random.choice(self.indices, size=self.input_view_num + self.target_view_num, replace=False)
         input_idxs = idxs[:self.input_view_num]
         target_idxs = idxs[self.input_view_num:]
-
+        
         def load_sample(i):
+            # For images: 000001.png
             img, alpha = self.load_image(self.rgb_dir / f"{i:06d}.png", bg_color=[1,1,1])
-            normal_img, _ = self.load_image(self.normal_dir / f"{i:06d}.exr", bg_color=[0,0,0])
-            normal_img = normal_img[:3]  # Remove potential alpha
-            depth = cv2.imread(str(self.depth_dir / f"{i:06d}.exr"), cv2.IMREAD_UNCHANGED)
-            depth = torch.from_numpy(depth).unsqueeze(0).float() / 255. * self.depth_scale
+            # For normals and depth: 000001_0001.png (or just 000001.png if you changed the naming)
+            postfix = '_0001'  # Remove this if you now use just 000001.png
+            normal_img_path = self.normal_dir / f"{i:06d}{postfix}.png"
+            depth_img_path = self.depth_dir / f"{i:06d}{postfix}.png"
+        
+            # Use PIL for PNG files
+            normal_img = Image.open(normal_img_path).convert("RGB")
+            normal_img = np.asarray(normal_img) / 255.
+            normal_img = torch.from_numpy(normal_img.transpose(2, 0, 1)).float()  # (C, H, W)
+        
+            depth = Image.open(depth_img_path)
+            depth = np.asarray(depth).astype(np.float32) / 255. * self.depth_scale
+            if depth.ndim == 2:
+                depth = torch.from_numpy(depth).unsqueeze(0)
+            else:
+                depth = torch.from_numpy(depth[None, ...])
+        
             pose = self.cam_poses[i]
             pose = np.vstack([pose, [0, 0, 0, 1]])
             return img, alpha, depth, normal_img, pose
-
+        
         images, alphas, depths, normals, poses = zip(*[load_sample(i) for i in idxs])
         images, alphas, depths, normals = map(lambda x: torch.stack(x), [images, alphas, depths, normals])
         poses = torch.from_numpy(np.stack(poses)).float()

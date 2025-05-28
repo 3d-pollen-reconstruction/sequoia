@@ -57,11 +57,22 @@ def extra_args(parser):
 args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
 device = util.get_cuda(args.gpu_id[0])
 
+def convert_to_dict(config_obj):
+    if isinstance(config_obj, dict):
+        return {k: convert_to_dict(v) for k, v in config_obj.items()}
+    elif isinstance(config_obj, list):
+        return [convert_to_dict(i) for i in config_obj]
+    else:
+        return config_obj
+    
+config_dict = convert_to_dict(conf)
+
+    
 wandb.init(
     project="PixelNerf",
     entity="sequoia-bat",
     name=args.name if hasattr(args, "name") else None,
-    config=conf.toDict() if hasattr(conf, "toDict") else dict(conf),
+    config=config_dict,
     notes="Full config loaded from config file",
     tags=["table"]
 )
