@@ -8,6 +8,7 @@ defaults:
   - experiment: null
 
 ckpt_path: null
+default_root_dir: checkpoints/
 
 task_name: "train"
 tags: ["dev"]
