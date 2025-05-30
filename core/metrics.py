@@ -1,12 +1,8 @@
 import logging
-from typing import Optional, Literal, Dict, Sequence
+from typing import Sequence
 import torch
-import torchmetrics
+from torch import nn
 from torchmetrics import MetricCollection
-import matplotlib.pyplot as plt
-import seaborn as sns
-import io
-import numpy as np
 
 from torchmetrics import Metric
 from lightning.pytorch.loggers import NeptuneLogger, WandbLogger
@@ -75,6 +71,54 @@ class IoU3D(Metric):
             return torch.tensor(1.0, device=self.intersection.device)
         return self.intersection / self.union
 
+def batch_iou(pred_vol, gt_vol, thresh=0.5, eps=1e-6, reduction="mean"):
+    """
+    pred_vol : Tensor  [B, 1, D, H, W]  – probabilities in [0,1]
+    gt_vol   : Tensor  [B, 1, D, H, W]  – binary (0/1) occupancy
+    thresh   : float or (list/tuple)     – threshold(s) used to binarise pred_vol
+    eps      : float                     – small value to avoid division-by-zero
+    reduction: "none" | "mean" | "sum"   – behaviour identical to PyTorch losses
+
+    Returns
+    -------
+    iou      : Tensor
+        * shape [B]   if reduction=="none" and single threshold
+        * shape [B,T] if reduction=="none" and multiple thresholds
+        * scalar      otherwise
+    """
+    if isinstance(thresh, (list, tuple)):
+        # ––– multiple thresholds at once –––
+        ious = []
+        for t in thresh:
+            ious.append(batch_iou(pred_vol, gt_vol, t, eps, reduction="none"))
+        ious = torch.stack(ious, dim=-1)  # [B, T]
+        if reduction == "none":
+            return ious
+        elif reduction == "mean":
+            return ious.mean()
+        elif reduction == "sum":
+            return ious.sum()
+        else:
+            raise ValueError(f"Unknown reduction: {reduction}")
+
+    # ––– single threshold –––
+    pred_bin = (pred_vol >= thresh)          # bool
+    gt_bin   = (gt_vol   >= 0.5)             # ensure bool even if 0/1 floats
+
+    inter = (pred_bin & gt_bin).float().sum(dim=(1,2,3,4))   # [B]
+    union = (pred_bin | gt_bin).float().sum(dim=(1,2,3,4))   # [B]
+
+    iou = inter / (union + eps)                              # [B]
+
+    if reduction == "none":
+        return iou
+    elif reduction == "mean":
+        return iou.mean()            # scalar
+    elif reduction == "sum":
+        return iou.sum()             # scalar
+    else:
+        raise ValueError(f"Unknown reduction: {reduction}")
+
 def init_metrics(
     stage: str,
     metrics: Sequence[Metric] = None
@@ -94,14 +138,25 @@ class MetricsMixin:
     def __init__(self, *args, metric_list: Sequence[Metric]=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.train_metrics = init_metrics("train", metric_list)
-        self.val_metrics   = init_metrics("val",   metric_list)
+        self.metric_collections = nn.ModuleDict({
+            "train_metrics": init_metrics("train", metric_list),
+            "val_metrics":   init_metrics("val",   metric_list),
+            "test_metrics":  init_metrics("test",  metric_list),
+        })
  
     def log_train_metrics(self, preds, target):
         logs = self.train_metrics(preds, target)
-        
         self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
 
     def log_val_metrics(self, preds, target):
         logs = self.val_metrics(preds, target)
+        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
+        
+    def log_test_metrics(self, preds, target):
+        logs = self.test_metrics(preds, target)
+        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
+        
+    def log_stage_metrics(self, stage: str, preds, target):
+        mc = self.metric_collections[f"{stage}_metrics"]
+        logs = mc(preds, target)
         self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)

@@ -26,7 +26,7 @@ class VoxelGenerator:
     def _mesh_to_voxel_tensor(self,
                          mesh: trimesh.Trimesh,
                          meta,
-                         res: int = 128,
+                         res: int = 32,
                          fill: bool = True,
                          device: torch.device = torch.device('cpu')) -> torch.BoolTensor:
         """
@@ -66,7 +66,7 @@ class VoxelGenerator:
                 mesh = trimesh.load(os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "meshes", file))
                 metadata = json.loads(Path(os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "images", "metadata", file.replace(".stl", "_cam.json"))).read_text())
                 
-                voxel = self._mesh_to_voxel_tensor(mesh, metadata, res=128, fill=True, device=torch.device('cpu'))
+                voxel = self._mesh_to_voxel_tensor(mesh, metadata, res=32, fill=True, device=torch.device('cpu'))
                 torch.save(voxel, os.path.join(voxels_dir, file.replace(".stl", ".pt")))
         else:
             logger.info("Meshes have already been turned into Voxels.")

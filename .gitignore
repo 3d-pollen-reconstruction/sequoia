@@ -50,3 +50,6 @@ Pixel_Nerf/pollen.zip
 Pixel_Nerf/pollen_128/
 Pixel_Nerf/readme-img/paper_teaser.jpg
 Pixel_Nerf/readme-img/paper_teaser.jpg
+
+pretrained/*
+reconstruction/

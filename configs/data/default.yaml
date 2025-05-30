@@ -9,7 +9,5 @@ image_transforms:
 
 mesh_transforms: null
 batch_size: 8
-n_splits: 5
-fold_idx: 0
 num_workers: 4
 seed: 1337
