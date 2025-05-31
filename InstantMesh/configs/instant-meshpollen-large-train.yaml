@@ -3,8 +3,8 @@ model:
   base_learning_rate: 4.0e-05
   target: src.model_mesh.MVRecon
   params:
-    input_size: 320
-    render_size: 512
+    input_size: 256
+    render_size: 256
     
     lrm_generator_config:
       target: src.models.lrm_mesh.InstantMesh
@@ -26,7 +26,7 @@ model:
 data:
   target: src.data.objaverse.DataModuleFromConfig
   params:
-    batch_size: 8
+    batch_size: 1
     num_workers: 8
     train:
       target: src.data.objaverse.PollenMultiObjectDataset
@@ -41,8 +41,8 @@ data:
       target: src.data.objaverse.PollenMultiObjectDataset
       params:
         root_dir: "pollen/pollen_val"
-        input_view_num: 6
-        target_view_num: 4
+        input_view_num: 4
+        target_view_num: 2
         total_view_n: 32
         fov: 50
         camera_rotation: False

@@ -35,6 +35,16 @@ class SRNDataset(torch.utils.data.Dataset):
 
         self.dataset_name = self.list_prefix # Verwende den ermittelten Prefix als Namen
         self.base_path = os.path.join(self.path, self.list_prefix + "_" + self.stage)
+        # data dir has augmented in the name, e.g. "pollen_augmented", then its pollen_augmented/pollen_train 
+        if "augmented" in self.list_prefix:
+            self.base_path = os.path.join(self.path, f"pollen_{self.stage}")
+        else:
+            self.base_path = os.path.join(self.path, f"{self.list_prefix}_{self.stage}")
+
+        if not os.path.isdir(self.base_path):
+            error_msg = f"ERROR: Base path for split does not exist or is not a directory: {self.base_path}"
+            print(error_msg)
+            
         # ---------------------------------
 
         print("Loading SRN dataset", self.base_path, "name:", self.dataset_name)
