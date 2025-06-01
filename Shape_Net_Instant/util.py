@@ -275,7 +275,8 @@ def validate_camera_for_instantmesh(camera_data, expected_fov=50):
     """
     actual_fov = math.degrees(camera_data.angle)
     if abs(actual_fov - expected_fov) > 1:
-        print(f"Warning: FOV is {actual_fov}°, InstantMesh expects ~{expected_fov}°")
+        print("Warning: FOV is {0}°, InstantMesh expects ~{1}°".format(actual_fov, expected_fov))
+
     
     return True
 
