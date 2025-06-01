@@ -18,6 +18,10 @@ class BlenderInterface():
         self.blender_renderer.resolution_percentage = 100
         self.blender_renderer.image_settings.file_format = 'PNG'
         self.blender_renderer.alpha_mode = 'SKY'
+        self.camera = bpy.context.scene.camera
+        self.camera.data.sensor_height = self.camera.data.sensor_width
+        # InstantMesh often uses FOV around 50 degrees
+        self.camera.data.angle = np.radians(50)  # Set FOV to 50 degrees
 
         # Lighting
         world = bpy.context.scene.world
@@ -191,18 +195,15 @@ class BlenderInterface():
             bpy.ops.render.render(write_still=True)
             cam_poses.append(np.array(mat))
 
-            if write_cam_params:
-                RT = util.get_world2cam_from_blender_cam(self.camera)
-                cam2world = RT.inverted()
-                # Save both for .npz and optionally .txt
-                cam_poses.append(np.array(cam2world))
-
-                if write_cam_params:
-                    with open(os.path.join(pose_dir, '%06d.txt' % i), 'w') as pose_file:
-                        matrix_flat = [cam2world[j][k] for j in range(4) for k in range(4)]
-                        pose_file.write(' '.join(map(str, matrix_flat)) + '\n')
-        
-        np.savez(os.path.join(output_dir, 'cameras.npz'), cam_poses=np.stack(cam_poses, axis=0))
+        # Move this OUTSIDE the loop and use collected poses
+        if write_cam_params:
+            K = util.get_calibration_matrix_K_from_blender(self.camera.data)
+            camera_data = {
+                'intrinsics': K,
+                'poses': np.array(cam_poses),  # Use the collected poses
+                'resolution': self.resolution
+            }
+            np.savez(os.path.join(output_dir, 'camera_data.npz'), **camera_data)
 
         # Cleanup
         meshes_to_remove = [ob.data for ob in bpy.context.selected_objects]

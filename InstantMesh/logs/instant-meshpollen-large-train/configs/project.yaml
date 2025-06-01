@@ -16,14 +16,14 @@ model:
         triplane_low_res: 32
         triplane_high_res: 64
         triplane_dim: 80
-        rendering_samples_per_ray: 128
-        grid_res: 128
+        rendering_samples_per_ray: 64
+        grid_res: 64
         grid_scale: 2.1
 data:
   target: src.data.objaverse.DataModuleFromConfig
   params:
     batch_size: 1
-    num_workers: 8
+    num_workers: 1
     train:
       target: src.data.objaverse.PollenMultiObjectDataset
       params:

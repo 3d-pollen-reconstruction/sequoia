@@ -1,28 +1,24 @@
-
 model:
   base_learning_rate: 4.0e-05
   target: src.model_mesh.MVRecon
   params:
     input_size: 256
-    render_size: 256
-    
+    render_size: 128
     lrm_generator_config:
       target: src.models.lrm_mesh.InstantMesh
       params:
         encoder_feat_dim: 768
         encoder_freeze: false
         encoder_model_name: facebook/dino-vitb16
-        transformer_dim: 1024
-        transformer_layers: 16
-        transformer_heads: 16
+        transformer_dim: 512
+        transformer_layers: 8
+        transformer_heads: 8
         triplane_low_res: 32
         triplane_high_res: 64
-        triplane_dim: 80
-        rendering_samples_per_ray: 64
+        triplane_dim: 32
+        rendering_samples_per_ray: 32
         grid_res: 64
         grid_scale: 2.1
-
-
 data:
   target: src.data.objaverse.DataModuleFromConfig
   params:
@@ -31,23 +27,21 @@ data:
     train:
       target: src.data.objaverse.PollenMultiObjectDataset
       params:
-        root_dir: "pollen/pollen_train"
+        root_dir: pollen/pollen_train
         input_view_num: 6
         target_view_num: 4
         total_view_n: 32
         fov: 50
-        camera_rotation: True
+        camera_rotation: true
     validation:
       target: src.data.objaverse.PollenMultiObjectDataset
       params:
-        root_dir: "pollen/pollen_val"
+        root_dir: pollen/pollen_val
         input_view_num: 4
         target_view_num: 2
         total_view_n: 32
         fov: 50
-        camera_rotation: False
-
-
+        camera_rotation: false
 lightning:
   modelcheckpoint:
     params:
@@ -55,11 +49,12 @@ lightning:
       save_top_k: -1
       save_last: true
   callbacks: {}
-
   trainer:
     benchmark: true
     max_epochs: -1
     val_check_interval: 1000
     num_sanity_val_steps: 0
     accumulate_grad_batches: 1
-    check_val_every_n_epoch: null   # if not set this, validation does not run
+    check_val_every_n_epoch: 4
+    accelerator: gpu
+    devices: 1
