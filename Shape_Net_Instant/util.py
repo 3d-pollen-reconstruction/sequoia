@@ -9,6 +9,18 @@ from functools import reduce
 def normalize(vec):
     return vec / (np.linalg.norm(vec, axis=-1, keepdims=True) + 1e-9)
 
+def get_instantmesh_train_cameras(num_views=32, radius=2.0, elev_min=15, elev_max=60):
+    cameras = []
+    # Evenly spaced in azimuth
+    for i in range(num_views):
+        az = 2 * np.pi * i / num_views
+        # Evenly spaced in elevation
+        elev = np.radians(elev_min + (elev_max - elev_min) * (i / (num_views - 1)))
+        x = radius * np.cos(elev) * np.cos(az)
+        y = radius * np.sin(elev)
+        z = radius * np.cos(elev) * np.sin(az)
+        cameras.append((x, y, z))
+    return np.array(cameras)
 
 # All the following functions follow the opencv convention for camera coordinates.
 def look_at(cam_location, point):

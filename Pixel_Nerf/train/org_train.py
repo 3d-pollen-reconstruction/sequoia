@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="PIL")
 warnings.filterwarnings("ignore", category=UserWarning, module="torch")
 # filter weights only warnings
 warnings.filterwarnings("ignore", category=UserWarning, message=".*weights only.*")
-
+warnings.filterwarnings("ignore", category=FutureWarning, module="torch")
 os.environ["WANDB_SILENT"] = "true"  # Reduce console output
 os.environ["WANDB_MAX_HIST_STEPS"] = "100"  # Limit history steps
 #os.environ["WANDB_MODE"] = "dryrun"  # Creates files locally but 
@@ -304,6 +304,8 @@ class PixelNeRFTrainer(trainlib.Trainer):
     def train_step(self, data, global_step):
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
         wandb.log(loss_dict, step=global_step)
+        if hasattr(self, "optim"):
+            loss_dict["lr"] = self.optim.param_groups[0]["lr"]
         return loss_dict
 
     #def eval_step(self, data, global_step):

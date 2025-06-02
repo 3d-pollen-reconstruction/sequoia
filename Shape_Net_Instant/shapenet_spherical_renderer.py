@@ -144,8 +144,12 @@ for split_name, files in splits.items():
             obj.select = True
             bpy.ops.object.delete()
 
-            # Get camera positions based on split type
-            cam_locations = get_camera_positions_for_split(split_name, sphere_radius, num_views)
+            if split_name == "train":
+                cam_locations = util.get_instantmesh_train_cameras(num_views, radius=sphere_radius, elev_min=15, elev_max=60)
+            else:
+                # Lower number of views: maybe uniform azimuth, fixed elevation (e.g. 30°)
+                cam_locations = util.get_instantmesh_train_cameras(num_views, radius=sphere_radius, elev_min=25, elev_max=45)
+
 
             cv_poses = util.look_at(cam_locations, np.zeros((1, 3)))
             blender_poses = [util.cv_cam2world_to_bcam2world(m) for m in cv_poses]
