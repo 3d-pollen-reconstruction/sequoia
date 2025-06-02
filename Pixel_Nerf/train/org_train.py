@@ -19,10 +19,17 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from dotmap import DotMap
+# silence some warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torchvision")
+warnings.filterwarnings("ignore", category=UserWarning, module="PIL")
+# filter pytorch warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+# filter weights only warnings
+warnings.filterwarnings("ignore", category=UserWarning, message=".*weights only.*")
 
 os.environ["WANDB_SILENT"] = "true"  # Reduce console output
 os.environ["WANDB_MAX_HIST_STEPS"] = "100"  # Limit history steps
-os.environ["WANDB_MODE"] = "dryrun"  # Creates files locally but 
+#os.environ["WANDB_MODE"] = "dryrun"  # Creates files locally but 
 
 
 def extra_args(parser):
@@ -137,15 +144,15 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
-        if batch == 0 and epoch > 0 and epoch % 2 == 0:
-            print("Syncing TensorBoard logs to WandB...")
-            try:
-                import subprocess
-                # This will sync only the latest logs
-                log_dir = self.summary_path
-                subprocess.run(["wandb", "sync", log_dir], check=False)
-            except Exception as e:
-                print(f"Error syncing TensorBoard logs: {e}")
+        #if batch == 0 and epoch > 0 and epoch % 2 == 0:
+        #    print("Syncing TensorBoard logs to WandB...")
+        #    try:
+        #        import subprocess
+        #        # This will sync only the latest logs
+        #        log_dir = self.summary_path
+        #        subprocess.run(["wandb", "sync", log_dir], check=False)
+        #    except Exception as e:
+        #        print(f"Error syncing TensorBoard logs: {e}")
 
     def extra_save_state(self):
         torch.save(renderer.state_dict(), self.renderer_state_path)
@@ -259,7 +266,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
             if hasattr(fine, 'weights') and fine.weights is not None:
                 alpha_fine = fine.weights.sum(dim=-1)
                 alpha_sparsity = torch.mean(alpha_fine)
-                alpha_reg_loss += 0.01 * alpha_sparsity
+                alpha_reg_loss += 0.03 * alpha_sparsity
                 loss_dict["alpha_sparse_f"] = alpha_sparsity.item()
 
         # MODIFICATION 4: Add total regularization loss
@@ -296,7 +303,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
     def train_step(self, data, global_step):
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
-        #wandb.log(loss_dict, step=global_step)
+        wandb.log(loss_dict, step=global_step)
         return loss_dict
 
     #def eval_step(self, data, global_step):
@@ -308,7 +315,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
     def eval_step(self, data, global_step):
         renderer.eval()
         losses = self.calc_losses(data, is_train=False, global_step=global_step)
-        #wandb.log({f"val_{k}": v for k, v in losses.items()}, step=global_step)
+        wandb.log({f"val_{k}": v for k, v in losses.items()}, step=global_step)
         renderer.train()
         return losses
 
@@ -416,27 +423,26 @@ class PixelNeRFTrainer(trainlib.Trainer):
             vis_fine = np.hstack(vis_list)
             vis = np.vstack((vis_coarse, vis_fine))
             rgb_psnr = rgb_fine_np
-            #wandb.log({
-            #"psnr": util.psnr(rgb_fine_np, gt),
-            #"c_rgb_min": float(rgb_coarse_np.min()),
-            #"c_rgb_max": float(rgb_coarse_np.max()),
-            #"c_alpha_min": float(alpha_coarse_np.min()),
-            #"c_alpha_max": float(alpha_coarse_np.max()),
-            #"f_rgb_min": float(rgb_fine_np.min()),
-            #"f_rgb_max": float(rgb_fine_np.max()),
-            #"f_alpha_min": float(alpha_fine_np.min()),
-            #"f_alpha_max": float(alpha_fine_np.max()),
-        #}, step=global_step)
+            wandb.log({
+            "psnr": util.psnr(rgb_fine_np, gt),
+            "c_rgb_min": float(rgb_coarse_np.min()),
+            "c_rgb_max": float(rgb_coarse_np.max()),
+            "c_alpha_min": float(alpha_coarse_np.min()),
+            "c_alpha_max": float(alpha_coarse_np.max()),
+            "f_rgb_min": float(rgb_fine_np.min()),
+            "f_rgb_max": float(rgb_fine_np.max()),
+            "f_alpha_min": float(alpha_fine_np.min()),
+            "f_alpha_max": float(alpha_fine_np.max()),
+        }, step=global_step)
         else:
-            pass
-            #rgb_psnr = rgb_coarse_np
-            #wandb.log({
-            #"psnr": util.psnr(rgb_coarse_np, gt),
-            #"c_rgb_min": float(rgb_coarse_np.min()),
-            #"c_rgb_max": float(rgb_coarse_np.max()),
-            #"c_alpha_min": float(alpha_coarse_np.min()),
-            #"c_alpha_max": float(alpha_coarse_np.max()),
-        #}, step=global_step)
+            rgb_psnr = rgb_coarse_np
+            wandb.log({
+            "psnr": util.psnr(rgb_coarse_np, gt),
+            "c_rgb_min": float(rgb_coarse_np.min()),
+            "c_rgb_max": float(rgb_coarse_np.max()),
+            "c_alpha_min": float(alpha_coarse_np.min()),
+            "c_alpha_max": float(alpha_coarse_np.max()),
+        }, step=global_step)
 
 
         psnr = util.psnr(rgb_psnr, gt)
