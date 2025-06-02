@@ -12,9 +12,9 @@ import blender_interface
 def validate_views_for_instantmesh(num_views, split_name):
     """InstantMesh validation for different splits"""
     if split_name == "train" and num_views < 16:
-        print(f"Warning: {num_views} views may be insufficient for InstantMesh training (recommended: 32)")
+        print("Warning: views may be insufficient for InstantMesh training (recommended: 32)")
     elif split_name in ["val", "test"] and num_views < 4:
-        print(f"Warning: {num_views} views may be insufficient for InstantMesh {split_name}")
+        print("Warning: views may be insufficient for InstantMesh {split_name}")
     return True
 
 def get_camera_positions_for_split(split_name, sphere_radius, num_views):
@@ -40,7 +40,7 @@ p.add_argument('--output_dir', type=str, required=True, help='Base output direct
 p.add_argument('--num_observations_train', type=int, default=32, help='Number of views per object for training.')
 p.add_argument('--num_observations_val', type=int, default=8, help='Number of views per object for validation.')
 p.add_argument('--num_observations_test', type=int, default=8, help='Number of views per object for testing.')
-p.add_argument('--resolution', type=int, default=256, help='Image resolution.')
+p.add_argument('--resolution', type=int, default=224, help='Image resolution.')
 p.add_argument('--mesh_fpath', type=str, help='Path to a single mesh file to process')
 argv = sys.argv[sys.argv.index("--") + 1:]
 opt = p.parse_args(argv)
@@ -104,7 +104,7 @@ for split_name, files in splits.items():
     num_views = config["num_views"]
     split_output = config["output_dir"]
     
-    print(f"Rendering {len(files)} meshes for split: {split_name} ({num_views} views each)")
+    print("Rendering {} meshes for split: {} ({} views each)".format(len(files), split_name, num_views))
     validate_views_for_instantmesh(num_views, split_name)
 
     successful_renders = 0
@@ -114,7 +114,7 @@ for split_name, files in splits.items():
         mesh_name = os.path.splitext(os.path.basename(mesh_fpath))[0]
         instance_dir = os.path.join(split_output, mesh_name)
         
-        print(f"Processing {mesh_idx+1}/{len(files)}: {mesh_name}")
+        print("Processing {}/{}: {}".format(mesh_idx+1, len(files), mesh_name))
 
         try:
             # Import mesh and normalize to fit inside unit sphere
@@ -127,7 +127,7 @@ for split_name, files in splits.items():
             radius = max((v - center).length for v in bbox_corners)
             
             if radius == 0:
-                print(f"Warning: Mesh {mesh_name} has zero radius, skipping")
+                print("Warning: Mesh {} has zero radius, skipping".format(mesh_name))
                 failed_renders += 1
                 continue
                 
@@ -180,14 +180,14 @@ for split_name, files in splits.items():
                 json.dump(metadata, f, indent=2)
 
             successful_renders += 1
-            print(f"Successfully rendered: {mesh_name}")
+            print("Successfully rendered: {}".format(mesh_name))
 
         except Exception as e:
-            print(f"Failed to render {mesh_name}: {e}")
+            print("Failed to render {}: {}".format(mesh_name, e))
             failed_renders += 1
             continue
 
-    print(f"Split {split_name} complete: {successful_renders} successful, {failed_renders} failed")
+    print("Split {} complete: {} successful, {} failed".format(split_name, successful_renders, failed_renders))
 
 # Create split summary
 split_summary = {
@@ -213,5 +213,5 @@ split_json_path = os.path.join(opt.output_dir, "split_summary.json")
 with open(split_json_path, "w") as f:
     json.dump(split_summary, f, indent=4)
 
-print(f"Saved split information to: {split_json_path}")
+print("Saved split information to: {}".format(split_json_path))
 print("Rendering complete! Data ready for InstantMesh training.")
