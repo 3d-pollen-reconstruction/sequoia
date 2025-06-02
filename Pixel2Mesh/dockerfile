@@ -1,0 +1,48 @@
+# Use the official NVIDIA CUDA base image with Python 3.7
+FROM nvidia/cuda:9.0-cudnn7-devel-ubuntu16.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Set work directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    python3.7 \
+    python3.7-dev \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python 3.7 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.7 1
+
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Copy requirements.txt
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the project
+COPY . .
+
+# Initialize submodules and compile necessary components
+RUN git submodule update --init --recursive && \
+    cd external/chamfer && python setup.py install && \
+    cd ../neural_renderer && python setup.py install
+
+# Set default command
+CMD ["bash"]

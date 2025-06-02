@@ -203,7 +203,7 @@ def main():
     device = util.get_cuda(args.gpu_id[0])
 
     dset = get_split_dataset(
-        args.dataset_format, args.datadir, want_split=args.split, training=False
+        args.dataset_format, args.datadir, want_split=args.split, training=False, image_size=[conf["model"]["img_sidelength"],conf["model"]["img_sidelength"]]
     )
     data_loader = torch.utils.data.DataLoader(
         dset, batch_size=1, shuffle=False, num_workers=8, pin_memory=False
@@ -288,6 +288,7 @@ def main():
 
     src_view_mask = None
     total_objs = len(data_loader)
+    print("Total objects:", total_objs)
 
     with torch.no_grad():
         for obj_idx, data in enumerate(data_loader):
@@ -325,8 +326,15 @@ def main():
 
             if all_rays is None or use_source_lut or args.free_pose:
                 if use_source_lut:
-                    obj_id = cat_name + "/" + obj_basename
+                    obj_id = "./pollen/" + cat_name + "/" + obj_basename
                     source = source_lut[obj_id]
+                    relpath = os.path.relpath(dpath, args.datadir).replace("\\", "/")
+                    if relpath not in source_lut:
+                        raise KeyError(
+                            f"No entry for '{relpath}' in viewlist; "
+                            f"available keys: {list(source_lut.keys())}"
+                        )
+                    source = source_lut[relpath]
 
                 NS = len(source)
                 src_view_mask = torch.zeros(NV, dtype=torch.bool)

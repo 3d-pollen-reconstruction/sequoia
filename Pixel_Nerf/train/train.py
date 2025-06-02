@@ -30,7 +30,6 @@ torch.autograd.set_detect_anomaly(True)
 
 from dotmap import DotMap
 warnings.filterwarnings('ignore', category=UserWarning)
-load_dotenv()  # loads .env into os.environ
 
 def extra_args(parser):
     parser.add_argument(
@@ -73,7 +72,10 @@ args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_s
 
 device = util.get_cuda(args.gpu_id[0])
 print("Using device", device)
-dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
+print(conf)
+dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir, image_size=[conf["model"]["img_sidelength"],conf["model"]["img_sidelength"]], training=True)
+# print image dimensions
+print("Image size", dset.image_size)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )
@@ -285,15 +287,18 @@ class PixelNeRFTrainer(trainlib.Trainer):
     def train_step(self, data, global_step):
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
         # Log all training metrics to wandb
-        wandb.log({f"train/{k}": v for k, v in loss_dict.items()}, step=global_step)
+        if global_step % 144 == 0:
+            wandb.log({f"train/{k}": v for k, v in loss_dict.items()}, step=global_step)
         return loss_dict
 
     def eval_step(self, data, global_step):
         renderer.eval()
         losses = self.calc_losses(data, is_train=False, global_step=global_step)
         renderer.train()
-        # Log all evaluation metrics to wandb
-        wandb.log({f"val/{k}": v for k, v in losses.items()}, step=global_step)
+        # Log all evaluation metrics to wa
+        # ndb
+        if global_step % 144 == 0:
+            wandb.log({f"val/{k}": v for k, v in losses.items()}, step=global_step)
         return losses
 
     def vis_step(self, data, global_step, idx=None):
@@ -440,20 +445,28 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         # set the renderer network back to train mode
         renderer.train()
-        wandb.log({
-            "vis/rgb": wandb.Image((rgb_psnr * 255).astype(np.uint8), caption="RGB Prediction"),
-            "vis/alpha": wandb.Image((alpha_fine_np * 255).astype(np.uint8), caption="Alpha"),
-            "vis/depth": wandb.Image((depth_fine_np / np.max(depth_fine_np + 1e-8) * 255).astype(np.uint8), caption="Depth"),
-            "vis/psnr": psnr,
-        }, step=global_step)
-        wandb.log({
-            "vis/combined": wandb.Image(vis, caption="Combined Visualization"),
-        }, step=global_step)
+        #wandb.log({
+        #    "vis/rgb": wandb.Image((rgb_psnr * 255).astype(np.uint8), caption="RGB Prediction"),
+        #    "vis/alpha": wandb.Image((alpha_fine_np * 255).astype(np.uint8), caption="Alpha"),
+        #    "vis/depth": wandb.Image((depth_fine_np / np.max(depth_fine_np + 1e-8) * 255).astype(np.uint8), caption="Depth"),
+        #    "vis/psnr": psnr,
+        #}, step=global_step)
+        #wandb.log({
+        #    "vis/combined": wandb.Image(vis, caption="Combined Visualization"),
+        #}, step=global_step)
         # wandb log central density slice
         if 'sigma' in locals():
-            wandb.log({
-                "vis/sigma_slice": wandb.Image(central_slice, caption="Central Sigma Slice (Z-axis)"),
-            }, step=global_step)
+            pass
+            #wandb.log({
+            #    "vis/sigma_slice": wandb.Image(central_slice, caption="Central Sigma Slice (Z-axis)"),
+            #}, step=global_step)
+            
+        # if alpha fine > 1.0 or alpha coarse > 1.0, print warning and exit program dont save checkpoint
+        if np.any(alpha_fine_np > 1.0) or np.any(alpha_coarse_np > 1.0):
+            warnings.warn(
+                "Alpha values greater than 1.0 detected, exiting program to prevent saving bad checkpoint."
+            )
+            sys.exit(1)
 
             
         return vis, vals

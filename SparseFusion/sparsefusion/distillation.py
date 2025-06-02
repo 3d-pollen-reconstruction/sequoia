@@ -8,7 +8,8 @@ import argparse
 import os
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-
+import mcubes
+import trimesh
 import torch
 import torch.nn.functional as F
 from pytorch3d.renderer import PerspectiveCameras
@@ -495,6 +496,55 @@ def distillation_loop(
     w_addr = f'{save_dir}/{seq_name}.pt'
     torch.save({'model_state_dict': ngp_network.state_dict()}, w_addr)
     print('input idx', input_idx)
+
+
+    print("Extracting mesh from density field...")
+
+    # Create a dense 3D grid of points
+    res = 512 # adjust if needed
+    bound = opt.bound
+    xs = torch.linspace(-bound, bound, res)
+    ys = torch.linspace(-bound, bound, res)
+    zs = torch.linspace(-bound, bound, res)
+    grid = torch.stack(torch.meshgrid(xs, ys, zs, indexing='ij'), dim=-1)  # (res, res, res, 3)
+    grid = grid.reshape(-1, 3)
+
+    # Query density in batches to avoid OOM
+    batch_size = 2**16 # 262144, adjust as needed for your GPU
+    density_list = []
+    with torch.no_grad():
+        for i in range(0, grid.shape[0], batch_size):
+            batch = grid[i:i+batch_size].cuda()
+            batch_dict = ngp_network.density(batch)
+            batch_density = batch_dict["sigma"].cpu()
+            density_list.append(batch_density)
+    density = torch.cat(density_list, dim=0).view(res, res, res).numpy()
+
+    # Run Marching Cubes
+    #vertices, triangles = mcubes.marching_cubes(density, 0.2)
+    
+    for thres in [0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 2.5]:
+        try:
+            vertices, triangles = mcubes.marching_cubes(density, thres)
+            print(f"Threshold {thres}: got {len(vertices)} vertices")
+            vertices = vertices / (res - 1) * (2 * bound) - bound
+
+            mesh = trimesh.Trimesh(vertices, triangles)
+            mesh_path = f"{save_dir}/mesh_{seq_name}_{thres}.ply"
+            mesh.export(mesh_path)
+            print(f"Mesh saved to {mesh_path}")
+
+        except Exception as e:
+            print(f"Threshold {thres} failed: {e}")
+
+    # Normalize back to world space
+    #vertices = vertices / (res - 1) * (2 * bound) - bound
+
+    # Save mesh
+    #mesh = trimesh.Trimesh(vertices, triangles)
+    #mesh.export(f"{save_dir}/mesh_{seq_name}.ply")
+    #print(f"Mesh saved to {save_dir}/mesh_{seq_name}.ply")
+
 
 
 def get_default_torch_ngp_opt():

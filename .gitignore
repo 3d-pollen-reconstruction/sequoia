@@ -13,6 +13,8 @@
 */.gitlab*
 */.github
 
+Pixel_NeRF/pollen_augmented/*
+
 .venv
 __pycache__/
 .env
@@ -40,6 +42,17 @@ wandb/
 !requirements.txt
 !Pixel_Nerf/requirements.txt
 
+
+Pixel_Nerf/pollen/*
+*/checkpoints/*
+
+*.jpg
+*.png
+*.gif
+
+
+
+
 Vanilla_Nerf/*.txt
 Vanilla_Nerf/data/*
 Pixel_NeRF/*.txt
@@ -50,6 +63,19 @@ Pixel_Nerf/pollen.zip
 Pixel_Nerf/pollen_128/
 Pixel_Nerf/readme-img/paper_teaser.jpg
 Pixel_Nerf/readme-img/paper_teaser.jpg
+/Hunyuan3D-2/data
+*.glb
+SparseFusion/data/co3d_toy/apple/apple_toy.pt
+SparseFusion/output/demo/apple_000_c2.pt
+Pixel_Nerf/pollen_augmented/256_res.zip
+.gitignore
+Pixel_Nerf/pollen_augmented/256_res/pollen_train/17767_Common_knapweed_Centaurea_nigra_pollen_grain_asymmetry_1/intrinsics.txt
 
+Pixel_Nerf/pollen_augmented/256_res/*
+Pixel_Nerf/pollen_augmented/256_res/**
+*.bin
+InstantMesh/pollen/pollen_train/*
+
+InstantMesh/pollen/*
 pretrained/*
 reconstruction/

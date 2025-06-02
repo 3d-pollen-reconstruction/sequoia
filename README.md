@@ -1,23 +1,93 @@
-# 3d reconstruction dataset
+# Recommended Training Method
 
-This repository downloads 3D models, renders two orthogonal views and saves them as PNG images.
+**Local training is strongly NOT recommended.**  
+Instead, use the official Docker containers provided at [https://hub.docker.com/repositories/etiir](https://hub.docker.com/repositories/etiir) for all training tasks.
 
-## Requirements
+## Why use Docker?
 
+- Ensures a consistent, reproducible environment
+- Avoids dependency and hardware issues on local machines
+- Simplifies deployment on HPC clusters
+
+## Running on SLURM
+
+To run training jobs on a SLURM-managed cluster, use the provided Singularity containers and submit your jobs with the following example scripts.
+
+---
+
+### PixelNeRF Training (`train_pixelnerf.sbatch`)
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=4_4pixelnerf_pollen_performance
+#SBATCH --partition=performance
+#SBATCH --mem=100G
+#SBATCH --gres=gpu:1
+#SBATCH --time=6-24:00:00
+#SBATCH --output=logs/pixelnerf_pollen_%j.out
+#SBATCH --error=logs/pixelnerf_pollen_%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+
+# Optional: Load modules
+# module load singularity
+
+export WANDB_API_KEY=57ec91b771b38d635cbbcf795a35d72a0c9c85cc
+
+singularity exec --nv \
+  --bind /home2/etienne.roulet/checkpoints:/container/checkpoints \
+  --bind /home2/etienne.roulet/sequoia/Pixel_Nerf/:/code \
+  --pwd /code \
+  --env HF_TOKEN=something \
+  pixelnerf_new.sif \
+  python3 train/org_train.py \
+    -n pollen_256_4_4 \
+    -c conf/exp/pollen.conf \
+    -D /code/pollen \
+    --checkpoints_path /container/checkpoints \
+    --visual_path /container/checkpoints/visuals \
+    --logs_path /container/checkpoints/logs \
+    --gpu_id='0' \
+    --resume \
+    --lr 0.00001 \
+    --epochs 10000000000000 \
+    --gamma 0.99999 \
+    --batch_size 2 \
+    --nviews "4" \
+    --resume
 ```
-pip install -r requirements.txt
+
+---
+
+### SparseFusion Training (`sparsefusion.sbatch`)
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=sparsefusion_pollen_perf
+#SBATCH --partition=performance
+#SBATCH --mem=100G
+#SBATCH --gres=gpu:1
+#SBATCH --time=6-24:00:00
+#SBATCH --output=logs/sparsefusion_%j.out
+#SBATCH --error=logs/sparsefusion_%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+
+# Optional: Load modules
+# module load singularity
+
+singularity exec --nv \
+  --bind /home2/etienne.roulet/sequoia/SparseFusion:/workspace \
+  --bind /home2/etienne.roulet/sequoia/SparseFusion/checkpoints:/workspace/checkpoints \
+  --pwd /workspace \
+  sparsefusion_latest.sif \
+  bash -c "source activate sparsefusion && python demo.py -d co3d_toy -c apple --eft ./checkpoints/sf/apple/ckpt_latest_eft.pt"
 ```
 
-## Usage
+---
 
-1. Download the models from [here](https://fhnw365-my.sharepoint.com/:u:/g/personal/florin_barbisch_fhnw_ch/EcDq5jeX2tNPlVmVedqwwVUBo-9qi0_qJDaCAFzpkTK0fQ?e=oEiQp7) and put the data in the [./data](./data) folder. Alternatively you can also run `download_models.ipynb` to download the models from the source.
-2. Run `random_render.py` to render a random model. Or import the `render_random_pollen()` function to use it in your own project.
+## Notes
 
-
-
-## Output
-
-- `data/models/` contains the downloaded models, each model's name starts with its ID (corresponds to the `id` column in `data/3d_pollen_library.csv`).
-- `data/3d_pollen_library.csv` contains the metadata of the models. Here the paldat ([https://www.paldat.org](https://www.paldat.org)) and global pollen project ((https://globalpollenproject.org)[https://globalpollenproject.org]) links in the `description` might be of interest.
-They have more structured information about the pollen species that could help in the analysis of the reconstruction (group reconstructions be a certain information (size, number of apertures, etc.)).
-- `random_render.py` contains a function `render_random_pollen()` that return two orthogonal views/projections of a random pollen 3d model and the model's file name and rotation (of the pollen model). The two images are grayscale and have a width and height of 1024 pixels. Running just the file will save the screenshot of a random model in the project root folder to test the rendering function.
+- Replace paths and environment variables as needed for your setup.
+- Always use the provided containers for best results and support.
+- For more containers and updates, see [https://hub.docker.com/repositories/etiir](https://hub.docker.com/repositories/etiir).
