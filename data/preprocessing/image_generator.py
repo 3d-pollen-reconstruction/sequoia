@@ -218,7 +218,7 @@ class ImageGenerator:
         missing_base_names = base_names - folder_base_names
         return [f"{base}.stl" for base in missing_base_names]
 
-    def process(self, files: List[str]) -> None:
+    def process(self, files: List[str], mesh_path: str = None) -> None:
         """
         For each missing mesh file, generate a concatenated image of two orthogonal views.
         Also, update the rotation records in a CSV file so that only new images get a new rotation
@@ -245,13 +245,13 @@ class ImageGenerator:
         if missing_files:
             logger.info(f"Found {len(missing_files)} out of {len(files)} files to generate images for.")
             for file in tqdm(missing_files, desc="Generating orthogonal image pairs"):
-                mesh_path = os.path.join(self.data_dir, "processed", "interim", file)
+                curr_mesh_path = os.path.join(mesh_path, file)
                 rotation = tuple(np.random.uniform(0, 360, 3))
                 try:
-                    left_view, right_view, meta = self._render_orthogonal_views(mesh_path, rotation)
+                    left_view, right_view, meta = self._render_orthogonal_views(curr_mesh_path, rotation)
                 except Exception as e:
                     logger.error(f"Failed to render images for {file}: {e}")
-                    continue
+                    break
 
                 concatenated = self._concatenate_images(left_view, right_view)
                 sample_name = os.path.splitext(file)[0]
@@ -267,7 +267,7 @@ class ImageGenerator:
                     Image.fromarray(np.uint8(concatenated)).save(image_path)
                 except Exception as e:
                     logger.error(f"Failed to save image for {file}: {e}")
-                    continue
+                    break
 
                 rotations_dict[sample_name] = rotation
         

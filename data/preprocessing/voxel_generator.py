@@ -7,7 +7,7 @@ from tqdm import tqdm
 import pyvista as pv
 import trimesh
 import torch
-from trimesh.transformations import euler_matrix, translation_matrix, scale_matrix
+from trimesh.transformations import translation_matrix, scale_matrix
 import numpy as np
 
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +20,8 @@ class VoxelGenerator:
 
     def _get_missing_files(self, files: list = None):
         folder_files = os.listdir(os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir, "voxels"))
+        logger.info(f"folder files: {len(folder_files)}, files: {len(files)}")
+        folder_files = [f.replace(".pt", ".stl") for f in folder_files]
         missing_meshes = set(files) - set(folder_files)
         return list(missing_meshes)
     
