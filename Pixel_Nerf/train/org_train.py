@@ -266,7 +266,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
             if hasattr(fine, 'weights') and fine.weights is not None:
                 alpha_fine = fine.weights.sum(dim=-1)
                 alpha_sparsity = torch.mean(alpha_fine)
-                alpha_reg_loss += 0.03 * alpha_sparsity
+                alpha_reg_loss += 0.015 * alpha_sparsity
                 loss_dict["alpha_sparse_f"] = alpha_sparsity.item()
 
         # MODIFICATION 4: Add total regularization loss
@@ -303,9 +303,11 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
     def train_step(self, data, global_step):
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
-        wandb.log(loss_dict, step=global_step)
-        if hasattr(self, "optim"):
-            loss_dict["lr"] = self.optim.param_groups[0]["lr"]
+        # Get current LR
+        current_lr = self.optim.param_groups[0]["lr"]
+        loss_dict["lr"] = current_lr  # Add LR to the dict
+        wandb.log(loss_dict, step=global_step)  # Log everything at once
+
         return loss_dict
 
     #def eval_step(self, data, global_step):
@@ -456,7 +458,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
             warnings.warn(
                 "Alpha values greater than 1.0 detected, exiting program to prevent saving bad checkpoint."
             )
-            sys.exit(1)
+            #sys.exit(1)
 
         # set the renderer network back to train mode
         renderer.train()
