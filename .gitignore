@@ -14,7 +14,7 @@
 */.github
 
 Pixel_NeRF/pollen_augmented/*
-
+!Pixel2MeshPlusPlus
 .venv
 __pycache__/
 .env
