@@ -1,1 +1,1 @@
-from core.metrics import MetricsMixin, batch_iou
+from core.metrics import MetricsMixin

@@ -54,9 +54,17 @@ class PollenDataset(Dataset):
             left_tensor  = t(left_img).squeeze(0).to(torch.float32)
             right_tensor = t(right_img).squeeze(0).to(torch.float32)
 
-        sample_id = stem[:5]
-        row       = self.rotations.loc[self.rotations['sample'] == sample_id].iloc[0]
-        rotations = torch.tensor(row[1:].astype(float).values, dtype=torch.float32, device=self.device)
+        df_row = self.rotations.loc[self.rotations['sample'] == stem]
+        if df_row.shape[0] == 0:
+            raise KeyError(f"No rotation entry found for sample '{stem}' in {self.rotations_csv}")
+
+        df_row = df_row.iloc[0]
+
+        rot_x = float(df_row['rot_x'])
+        rot_y = float(df_row['rot_y'])
+        rot_z = float(df_row['rot_z'])
+
+        rotations = torch.tensor([rot_x, rot_y, rot_z], dtype=torch.float32, device=self.device)
 
         voxels_path = os.path.join(self.voxels_path, f"{stem}.pt")
         voxels      = torch.load(voxels_path)

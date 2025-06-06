@@ -15,11 +15,6 @@ from metrics import MetricsMixin
 logger = logging.getLogger(__name__)
 
 
-def _strip_module_prefix(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-    """Remove a leading 'module.' (from DataParallel) if present."""
-    return {k.replace("module.", "", 1): v for k, v in state_dict.items()}
-
-
 class Pix2Vox(MetricsMixin, pl.LightningModule):
     """Lightning wrapper for the Pix2Vox model."""
     def __init__(
@@ -73,7 +68,7 @@ class Pix2Vox(MetricsMixin, pl.LightningModule):
         return self._generate(imgs, True, True)
 
     def training_step(self, batch: Tuple, batch_idx: int):
-        (left, right), _, _, vox = batch
+        (left, right), _, vox = batch
         if left.shape[1] == 1:
             left  = left.repeat(1, 3, 1, 1)
             right = right.repeat(1, 3, 1, 1)
@@ -92,7 +87,7 @@ class Pix2Vox(MetricsMixin, pl.LightningModule):
         return loss
 
     def _shared_eval_step(self, batch: Tuple, stage: str):
-        (left, right), _, _, vox = batch
+        (left, right), _, vox = batch
         if left.shape[1] == 1:
             left  = left.repeat(1, 3, 1, 1)
             right = right.repeat(1, 3, 1, 1)

@@ -39,7 +39,6 @@ class PollenDataModule(pl.LightningDataModule):
         train_ds, val_ds, test_ds = make_splits_from_json(
             split_json_path=split_json_path,
             image_transforms=self.image_transforms,
-            device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
             include_augmentations=self.include_augmentations,
         )
 
@@ -56,6 +55,7 @@ class PollenDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
+            persistent_workers=True,
         )
 
     def val_dataloader(self):
@@ -64,6 +64,7 @@ class PollenDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
+            persistent_workers=True,
         )
 
     def test_dataloader(self):
@@ -72,4 +73,5 @@ class PollenDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
+            persistent_workers=True
         )
