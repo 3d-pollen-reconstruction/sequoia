@@ -6,19 +6,29 @@ import os
 import math
 import random
 from vtk.util import numpy_support
+import trimesh
 
 # === CONFIG ===
-MAX_SAMPLES = 10  # Set to None for all files, or an integer for a quick test
+MAX_SAMPLES = 2  # Set to None for all files, or an integer for a quick test
 
 # Use absolute path for interim folder
 input_folder = r"C:\Users\super\Documents\Github\sequoia\data\processed\interim"
-output_root_folder = r"C:\Users\super\Documents\Github\sequoia\data\processed\pixel2mesh_data"
+output_root_folder = (
+    r"C:\Users\super\Documents\Github\sequoia\data\processed\pixel2mesh_original"
+)
+
 
 def get_camera_positions(num_views=8, distance=2.5):
     positions = []
     angles = [
-        (45, 30), (-45, 30), (135, 30), (-135, 30),
-        (45, -30), (-45, -30), (135, -30), (-135, -30)
+        (45, 30),
+        (-45, 30),
+        (135, 30),
+        (-135, 30),
+        (45, -30),
+        (-45, -30),
+        (135, -30),
+        (-135, -30),
     ]
     for i in range(num_views):
         azimuth, elevation = angles[i]
@@ -30,29 +40,53 @@ def get_camera_positions(num_views=8, distance=2.5):
         positions.append(((x, y, z), (azimuth, elevation)))
     return positions
 
+
 def check_3d_shape(vertices, dat_path):
     centered = vertices - vertices.mean(axis=0)
     u, s, vh = np.linalg.svd(centered, full_matrices=False)
     rank = np.sum(s > 1e-6)
-    print("   Vertices rank: {} (should be 3 for 3D shape)".format(rank))
+    print(f"   Vertices rank: {rank} (should be 3 for 3D shape)")
     if rank < 3:
-        print("❌ WARNING: Vertices in {} do not span a 3D shape!".format(os.path.basename(dat_path)))
+        print(
+            f"❌ WARNING: Vertices in {os.path.basename(dat_path)} do not span a 3D shape!"
+        )
     else:
-        print("✅ Vertices span a 3D shape.")
+        print(f"✅ Vertices span a 3D shape.")
 
-def render_multiview_data(mesh_path, output_dir, dat_path, image_size=(224, 224), num_views=8):
+
+def save_mesh_as_obj(polydata, obj_path):
+    writer = vtk.vtkOBJWriter()
+    writer.SetFileName(obj_path)
+    writer.SetInputData(polydata)
+    writer.Update()
+
+
+def render_multiview_data(
+    mesh_path, output_dir, dat_path, image_size=(224, 224), num_views=8
+):
     os.makedirs(output_dir, exist_ok=True)
+    mesh_dir = os.path.join(output_dir, "mesh")
+    os.makedirs(mesh_dir, exist_ok=True)
+
     reader = vtk.vtkSTLReader()
     reader.SetFileName(mesh_path)
     reader.Update()
     polydata = reader.GetOutput()
     bounds = polydata.GetBounds()
-    center = np.array([(bounds[0] + bounds[1]) / 2.0, 
-                       (bounds[2] + bounds[3]) / 2.0, 
-                       (bounds[4] + bounds[5]) / 2.0])
-    scale = max(bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4]) / 2.0
+    center = np.array(
+        [
+            (bounds[0] + bounds[1]) / 2.0,
+            (bounds[2] + bounds[3]) / 2.0,
+            (bounds[4] + bounds[5]) / 2.0,
+        ]
+    )
+    scale = (
+        max(bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4]) / 2.0
+    )
     if scale == 0.0:
-        print("❌ Warning: Mesh {} has zero size and will be skipped.".format(os.path.basename(mesh_path)))
+        print(
+            f"❌ Warning: Mesh {os.path.basename(mesh_path)} has zero size and will be skipped."
+        )
         return
     transform = vtk.vtkTransform()
     transform.Translate(-center[0], -center[1], -center[2])
@@ -62,6 +96,11 @@ def render_multiview_data(mesh_path, output_dir, dat_path, image_size=(224, 224)
     transform_filter.SetTransform(transform)
     transform_filter.Update()
     normalized_polydata = transform_filter.GetOutput()
+
+    # Save normalized mesh as OBJ in mesh_dir
+    obj_path = os.path.join(mesh_dir, "model.obj")
+    save_mesh_as_obj(normalized_polydata, obj_path)
+
     mapper = vtk.vtkPolyDataMapper()
     mapper.SetInputData(normalized_polydata)
     actor = vtk.vtkActor()
@@ -75,8 +114,9 @@ def render_multiview_data(mesh_path, output_dir, dat_path, image_size=(224, 224)
     render_window.SetSize(*image_size)
     camera_positions = get_camera_positions(num_views)
     all_camera_meta = []
-    rendering_dir = os.path.join(output_dir, 'rendering')
+    rendering_dir = os.path.join(output_dir, "rendering")
     os.makedirs(rendering_dir, exist_ok=True)
+    images = []  # <-- Collect images here
     for i, (position, angles) in enumerate(camera_positions):
         camera = renderer.GetActiveCamera()
         camera.SetPosition(position)
@@ -94,25 +134,68 @@ def render_multiview_data(mesh_path, output_dir, dat_path, image_size=(224, 224)
         dims = vtk_image.GetDimensions()
         vtk_array = vtk_image.GetPointData().GetScalars()
         numpy_image = numpy_support.vtk_to_numpy(vtk_array).reshape(dims[1], dims[0], 3)
-        image_path = os.path.join(rendering_dir, '{:02d}.png'.format(i))
+        image_path = os.path.join(rendering_dir, f"{i:02d}.png")
         plt.imsave(image_path, np.flipud(numpy_image))
-        camera_meta = [angles[0], angles[1], 0, np.linalg.norm(position), camera.GetViewAngle()]
+        images.append(np.flipud(numpy_image).astype(np.uint8))  # <-- Collect image
+        camera_meta = [
+            angles[0],
+            angles[1],
+            0,
+            np.linalg.norm(position),
+            camera.GetViewAngle(),
+        ]
         all_camera_meta.append(camera_meta)
-    metadata_path = os.path.join(rendering_dir, 'rendering_metadata.txt')
-    np.savetxt(metadata_path, np.array(all_camera_meta), fmt='%f')
+    metadata_path = os.path.join(rendering_dir, "rendering_metadata.txt")
+    np.savetxt(metadata_path, np.array(all_camera_meta), fmt="%f")
     vertices = numpy_support.vtk_to_numpy(normalized_polydata.GetPoints().GetData())
     faces_vtk = numpy_support.vtk_to_numpy(normalized_polydata.GetPolys().GetData())
     faces = faces_vtk.reshape(-1, 4)[:, 1:]
-    dat_content = (vertices.astype(np.float32), faces.astype(np.int32))
-    with open(dat_path, 'wb') as f:
-        pickle.dump(dat_content, f, protocol=2)
-    print("✅ Processed {} -> {}".format(mesh_path, output_dir))
+
+    # Pad triangle faces to (N, 4) with -1 for compatibility with the model
+    if faces.shape[1] == 3:
+        faces_padded = np.pad(faces, ((0, 0), (0, 1)), mode='constant', constant_values=0)  # pad with 0 for trimesh
+        mask = np.ones(faces_padded.shape, dtype=bool)
+        mask[:, 3] = False  # last column is padding
+    else:
+        faces_padded = faces
+        mask = np.ones(faces_padded.shape, dtype=bool)
+
+    # === Compute normals with trimesh ===
+    # Only use the first 3 columns for trimesh
+    mesh_tm = trimesh.Trimesh(vertices=vertices, faces=faces_padded[:, :3], process=False)
+    normals = mesh_tm.vertex_normals  # shape (N, 3)
+
+    # Restore -1 padding for saving
+    faces_save = faces_padded.copy()
+    if faces_save.shape[1] == 4:
+        faces_save[:, 3][~mask[:, 3]] = -1
+
+    # Debugging output
+    print("DEBUG points shape:", vertices.shape)
+    print("DEBUG normals shape:", normals.shape)
+    if normals.shape[0] != vertices.shape[0]:
+        print(f"❌ Normals/points count mismatch for {dat_path}: {normals.shape[0]} vs {vertices.shape[0]}")
+        return
+
+    # Use pollen_id from dat_path
+    pollen_id = os.path.splitext(os.path.basename(dat_path))[0]
+
+    np.savez_compressed(
+        dat_path.replace('.dat', '.npz'),
+        name=pollen_id,
+        points=vertices.astype(np.float32),
+        faces=faces_save.astype(np.int32),
+        normals=normals.astype(np.float32),
+    )
+    print(f"✅ Processed {mesh_path} -> {output_dir}")
     check_3d_shape(vertices, dat_path)
+
 
 def write_split_file(split_list, split_path):
     with open(split_path, "w") as f:
         for item in split_list:
             f.write(item + "\n")
+
 
 if __name__ == "__main__":
     os.makedirs(output_root_folder, exist_ok=True)
@@ -121,10 +204,13 @@ if __name__ == "__main__":
     os.makedirs(category_folder, exist_ok=True)
 
     all_stl = [f for f in os.listdir(input_folder) if f.endswith(".stl")]
-    all_dat = ["pollen_" + os.path.splitext(f)[0] + "_00.dat" for f in all_stl]
     all_ids = [os.path.splitext(f)[0] for f in all_stl]
 
-    combined = list(zip(all_ids, all_dat))
+    # Always use _00 for postfix
+    all_npz = [f"pollen_{id}_00.npz" for id in all_ids]
+    all_dirs = [f"pollen_{id}_00" for id in all_ids]
+
+    combined = list(zip(all_ids, all_npz, all_dirs))
     random.shuffle(combined)
     if MAX_SAMPLES is not None:
         combined = combined[:MAX_SAMPLES]
@@ -132,22 +218,30 @@ if __name__ == "__main__":
     train = combined[:split_idx]
     test = combined[split_idx:]
 
-    write_split_file([dat for _, dat in train], os.path.join(category_folder, "train_split.txt"))
-    write_split_file([dat for _, dat in test], os.path.join(category_folder, "test_split.txt"))
+    # Write split files with .npz filenames
+    write_split_file(
+        [npz for _, npz, _ in train], os.path.join(category_folder, "train_split.txt")
+    )
+    write_split_file(
+        [npz for _, npz, _ in test], os.path.join(category_folder, "test_split.txt")
+    )
 
     splits = [("train", train), ("test", test)]
     for split_name, split_items in splits:
         split_dir = os.path.join(category_folder, split_name)
         os.makedirs(split_dir, exist_ok=True)
-        for pollen_id, dat_name in split_items:
-            mesh_path = os.path.join(input_folder, "{}.stl".format(pollen_id))
+        for pollen_id, npz_name, dir_name in split_items:
+            mesh_path = os.path.join(input_folder, f"{pollen_id}.stl")
             if not os.path.exists(mesh_path):
-                print("❌ Mesh file not found: {}".format(mesh_path))
+                print(f"❌ Mesh file not found: {mesh_path}")
                 continue
-            output_model_dir = os.path.join(split_dir, pollen_id)
-            dat_path = os.path.join(split_dir, dat_name)
+            # Output directory and .npz path both use _00 postfix
+            output_model_dir = os.path.join(split_dir, dir_name)
+            dat_path = os.path.join(split_dir, npz_name.replace('.npz', '.dat'))
             try:
-                print("🔄 Processing {}/{}...".format(split_name, pollen_id))
-                render_multiview_data(mesh_path, output_model_dir, dat_path, num_views=8)
+                print(f"🔄 Processing {split_name}/{pollen_id}...")
+                render_multiview_data(
+                    mesh_path, output_model_dir, dat_path, num_views=8
+                )
             except Exception as e:
-                print("❌ Failed to process {}: {}".format(pollen_id, e))
+                print(f"❌ Failed to process {pollen_id}: {e}")
