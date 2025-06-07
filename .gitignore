@@ -29,7 +29,7 @@ __pycache__/
 **.stl
 **.npz
 */.jupyter_cache
-
+sequoia/Pixel2MeshPlusPlus/data/pollen/*
 lightning_logs/
 wandb/
 *.ckpt
