@@ -83,3 +83,8 @@ Pixel2MeshPlusPlus2/data/*.txt
 
 Pixel2MeshPlusPlus2/data/*.png
 Pixel2MeshPlusPlus2/data/*.npz
+Pixel2MeshPlusPlus2/*.obj
+Pixel2MeshPlusPlus2/*.txt
+Pixel2MeshPlusPlus2/data/pollen/**
+Pixel2MeshPlusPlus2/data/pollen_pretty_ggod/**
+*.ckpt*
