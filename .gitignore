@@ -88,3 +88,5 @@ Pixel2MeshPlusPlus2/*.txt
 Pixel2MeshPlusPlus2/data/pollen/**
 Pixel2MeshPlusPlus2/data/pollen_pretty_ggod/**
 *.ckpt*
+init_elli
+Pixel2MeshPlusPlus2/results/coarse_mvp2m/plt_back/*/init_ellipsoid
