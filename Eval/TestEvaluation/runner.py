@@ -42,8 +42,7 @@ class MeshEvaluator:
 
     @staticmethod
     def _print_duration(name, start, end, debug):
-        if debug:
-            print(f"[DEBUG] {name} took {end - start:.3f} seconds")
+        pass  # Debug print disabled
 
     def _load_existing_results(self):
         if os.path.exists(self.csv_save_path):
@@ -66,6 +65,7 @@ class MeshEvaluator:
             "Volume difference",
             "Surface area difference",
             "Edge length stats",
+            "Voxel IoU",
             "Euler characteristic",
             "Normal consistency"
         ]
@@ -75,20 +75,15 @@ class MeshEvaluator:
             mesh_pred = trimesh.load(pred_mesh_path, process=False)
             mesh_gt = trimesh.load(gt_mesh_path, process=False)
             metric_bar.update(1)
-            if self.debug:
-                print(f"\n[DEBUG] Loaded meshes from:\n - pred: {pred_mesh_path}\n - gt:   {gt_mesh_path}")
 
             # 2. ICP alignment
             mesh_pred_aligned, pts_pred_aligned = MeshUtils.align_icp(mesh_pred, mesh_gt, n_points=5000)
-            if self.debug:
-                print(f"[DEBUG] Finished ICP alignment. Sampled {pts_pred_aligned.shape[0]} aligned points.")
             metric_bar.update(1)
 
             # 3. Normalize & convex hull
             try:
                 mesh_pred_hull = mesh_pred_aligned.convex_hull
-            except Exception as e:
-                print(f"[ERROR] Failed to compute convex hull for prediction: {e}")
+            except Exception:
                 mesh_pred_hull = mesh_pred_aligned  # fallback
             mesh_gt_hull = MeshUtils.normalize_mesh(mesh_gt.copy()).convex_hull
             metric_bar.update(1)
@@ -124,28 +119,38 @@ class MeshEvaluator:
             edge_mean_gt, edge_std_gt = MeshUtils.edge_length_stats(mesh_gt)
             metric_bar.update(1)
 
-            # 11. Euler characteristic
+            # 11. Voxel IoU (32x32x32 grid) - use aligned and normalized meshes!
+            bbox = np.vstack([mesh_pred_hull.bounds, mesh_gt_hull.bounds])
+            bbox_min = bbox.min(axis=0)
+            bbox_max = bbox.max(axis=0)
+            max_dim = np.max(bbox_max - bbox_min)
+            pitch = max_dim / 32.0 if max_dim > 0 else 1.0
+
+            # Shift both meshes to the same origin for voxelization
+            mesh_pred_vox = mesh_pred_hull.copy()
+            mesh_gt_vox = mesh_gt_hull.copy()
+            mesh_pred_vox.apply_translation(-bbox_min)
+            mesh_gt_vox.apply_translation(-bbox_min)
+
+            voxel_iou = MeshUtils.voxel_iou(mesh_pred_vox, mesh_gt_vox, pitch=pitch)
+            metric_bar.update(1)
+
+            # 12. Euler characteristic
             euler_pred = MeshUtils.euler_characteristic(mesh_pred)
             euler_gt = MeshUtils.euler_characteristic(mesh_gt)
             metric_bar.update(1)
 
-            # 12. Normal consistency
+            # 13. Normal consistency
             normals_pred = mesh_pred.face_normals[face_idx_pred]
             normals_gt = mesh_gt.face_normals[face_idx_gt]
             normal_consistency = MeshUtils.normal_consistency(pts_pred, pts_gt, normals_pred, normals_gt)
             metric_bar.update(1)
 
-            # Extra debug print
-            if self.debug:
-                print(f"[DEBUG] Chamfer: {chamfer:.6f}, Hausdorff: {hausdorff:.6f}, F-score: {fscore:.4f}")
-                print(f"[DEBUG] Euler GT: {euler_gt}, Euler Pred: {euler_pred}, Normal Consistency: {normal_consistency:.4f}")
-
             results = (
                 chamfer, hausdorff, fscore, mesh_pred_hull, mesh_gt_hull,
                 vol_diff, area_diff,
                 edge_mean_pred, edge_std_pred, edge_mean_gt, edge_std_gt,
-                np.nan,  # voxel_iou skipped
-                euler_pred, euler_gt, normal_consistency
+                voxel_iou, euler_pred, euler_gt, normal_consistency, None
             )
         return results
 
@@ -252,14 +257,15 @@ class MeshEvaluator:
                             "voxel_iou": np.nan,
                             "euler_pred": np.nan,
                             "euler_gt": np.nan,
-                            "normal_consistency": np.nan
+                            "normal_consistency": np.nan,
+                            "voxel_plot_path": ""
                         }
                     else:
                         (
                             chamfer, hausdorff, fscore, mesh_pred_hull, mesh_gt_hull,
                             vol_diff, area_diff,
                             edge_mean_pred, edge_std_pred, edge_mean_gt, edge_std_gt,
-                            voxel_iou, euler_pred, euler_gt, normal_consistency
+                            voxel_iou, euler_pred, euler_gt, normal_consistency, voxel_plot_path
                         ) = self.evaluate_mesh(pred_mesh_path, gt_mesh_path)
                         mesh_pred_orig = trimesh.load(pred_mesh_path, process=False)
                         mesh_gt_orig = trimesh.load(gt_mesh_path, process=False)
@@ -294,7 +300,8 @@ class MeshEvaluator:
                             "voxel_iou": voxel_iou,
                             "euler_pred": euler_pred,
                             "euler_gt": euler_gt,
-                            "normal_consistency": normal_consistency
+                            "normal_consistency": normal_consistency,
+                            "voxel_plot_path": voxel_plot_path
                         }
                     tqdm.write(f"{model_name}/{fname}: {result['chamfer']}, {result['hausdorff']}, {result['fscore']}")
                     self.results.append(result)
@@ -318,6 +325,6 @@ if __name__ == "__main__":
         csv_save_path=CSV_SAVE_PATH,
         plot_plots=True,      # Set to False to disable plots in 'plots'
         plot_compare=False,    # Set to False to disable plots in 'compare'
-        debug=True,           # Set to False to disable debug timing output
-        voxel_iou_on=False    # Set to False to disable voxel IoU calculation
+        debug=False,           # Set to False to disable debug timing output
+        voxel_iou_on=True    # Set to False to disable voxel IoU calculation
     ).run()

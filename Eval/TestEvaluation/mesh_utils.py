@@ -159,8 +159,8 @@ class MeshUtils:
                 o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=max_iterations)
             )
 
-            print(f"[DEBUG][ICP] Fitness: {reg.fitness:.6f}, RMSE: {reg.inlier_rmse:.6f}")
-            print(f"[DEBUG][ICP] Transformation:\n{reg.transformation}")
+            #print(f"[DEBUG][ICP] Fitness: {reg.fitness:.6f}, RMSE: {reg.inlier_rmse:.6f}")
+            #print(f"[DEBUG][ICP] Transformation:\n{reg.transformation}")
 
             if reg.fitness < 1e-4:
                 print(f"[WARNING] ICP failed: very low fitness. No alignment applied.")

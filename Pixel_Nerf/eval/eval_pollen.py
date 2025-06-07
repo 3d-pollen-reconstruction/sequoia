@@ -127,7 +127,7 @@ class EvalMetricsRunner:
 
     def run(self):
         args, conf = util.args.parse_args(
-            self.extra_args, default_conf="conf/exp/pollen.conf", default_expname="pollen",
+            self.extra_args, default_conf="conf/exp/pollen.conf", default_expname="pollen_4_4",
         )
         args.resume = True
         device = util.get_cuda(args.gpu_id[0])
