@@ -1,7 +1,9 @@
 import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 import trimesh
-
+import open3d as o3d
+import numpy as np
+import trimesh
 
 class MeshUtils:
     @staticmethod
@@ -108,18 +110,76 @@ class MeshUtils:
         except Exception:
             return np.nan
 
+
+
     @staticmethod
-    def align_icp(mesh_source, mesh_target, n_points=1000, max_iterations=50):
+    def align_icp(mesh_source, mesh_target, n_points=5000, max_iterations=100, threshold=0.05):
         """
-        Align mesh_source to mesh_target using ICP (rigid, no scaling).
-        Returns a transformed copy of mesh_source.
+        Align mesh_source to mesh_target using Open3D ICP (point-to-plane).
+        Returns:
+            - mesh_aligned: transformed mesh_source
+            - pts_src_aligned: transformed sampled source points
         """
-        # Sample points from both meshes
-        pts_source, _ = trimesh.sample.sample_surface(mesh_source, n_points)
-        pts_target, _ = trimesh.sample.sample_surface(mesh_target, n_points)
+        import open3d as o3d
+        import numpy as np
+        import trimesh
+
+        src = mesh_source.copy()
+        tgt = mesh_target.copy()
+
+        # Normalize both meshes: center + scale to unit box
+        def normalize_mesh_inplace(mesh):
+            mesh.vertices -= mesh.vertices.mean(axis=0)
+            scale = np.linalg.norm(mesh.vertices.max(axis=0) - mesh.vertices.min(axis=0))
+            if scale > 0:
+                mesh.vertices /= scale
+            return mesh
+
+        normalize_mesh_inplace(src)
+        normalize_mesh_inplace(tgt)
+
+        # Sample points
+        pts_src, _ = trimesh.sample.sample_surface(src, n_points)
+        pts_tgt, _ = trimesh.sample.sample_surface(tgt, n_points)
+
+        # Convert to Open3D point clouds
+        pcd_src = o3d.geometry.PointCloud()
+        pcd_src.points = o3d.utility.Vector3dVector(pts_src)
+        pcd_src.estimate_normals()
+
+        pcd_tgt = o3d.geometry.PointCloud()
+        pcd_tgt.points = o3d.utility.Vector3dVector(pts_tgt)
+        pcd_tgt.estimate_normals()
+
         # Run ICP
-        matrix, _, _ = trimesh.registration.icp(pts_source, pts_target, scale=False, max_iterations=max_iterations)
-        # Transform mesh_source
-        mesh_aligned = mesh_source.copy()
-        mesh_aligned.apply_transform(matrix)
-        return mesh_aligned
+        try:
+            reg = o3d.pipelines.registration.registration_icp(
+                pcd_src, pcd_tgt, threshold, np.eye(4),
+                o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+                o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=max_iterations)
+            )
+
+            print(f"[DEBUG][ICP] Fitness: {reg.fitness:.6f}, RMSE: {reg.inlier_rmse:.6f}")
+            print(f"[DEBUG][ICP] Transformation:\n{reg.transformation}")
+
+            if reg.fitness < 1e-4:
+                print(f"[WARNING] ICP failed: very low fitness. No alignment applied.")
+                reg_trans = np.eye(4)
+            else:
+                reg_trans = reg.transformation
+
+        except Exception as e:
+            print(f"[ERROR] ICP failed due to exception: {e}")
+            reg_trans = np.eye(4)
+
+        # Apply transformation to mesh and points
+        mesh_aligned = src.copy()
+        mesh_aligned.apply_transform(reg_trans)
+
+        pts_src_homo = np.hstack([pts_src, np.ones((pts_src.shape[0], 1))])
+        pts_src_aligned = (reg_trans @ pts_src_homo.T).T[:, :3]
+
+        return mesh_aligned, pts_src_aligned
+
+
+
