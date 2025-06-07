@@ -14,7 +14,7 @@ def plot_scatter(pt, data_name, plt_path):
     fig = plt.figure()
     fig.set_size_inches(20.0 / 3, 20.0 / 3)
     ax = fig.gca(projection='3d')
-    ax.set_aspect('equal')
+    # ax.set_aspect('equal')  # Not supported for 3D axes
     ax.grid(color='r', linestyle='-',)
     ax.set_yticklabels([])
     ax.set_xticklabels([])
@@ -34,5 +34,5 @@ def plot_scatter(pt, data_name, plt_path):
     ax.set_ylim(mid_y - max_range, mid_y + max_range)
     ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
-    plt.margins(0, 0)
-    fig.savefig(os.path.join(plt_path, data_name.replace('.dat', '.png')), format='png', transparent=True, dpi=300, pad_inches=0, bbox_inches='tight')
+    # plt.margins(0, 0)  # Not supported for 3D axes, remove this line
+    fig.savefig(os.path.join(plt_path, data_name.replace('.npz', '.png')), format='png', transparent=True, dpi=300, pad_inches=0, bbox_inches='tight')

@@ -89,6 +89,7 @@ def main(cfg):
     # ---------------------------------------------------------------
     # Load init ellipsoid and info about vertices and edges
     pkl = pickle.load(open('data/iccv_p2mpp.dat', 'rb'))
+    print("Available keys in iccv_p2mpp.dat:", pkl.keys())
     # Construct Feed dict
     feed_dict = construct_feed_dict(pkl, placeholders)
     # ---------------------------------------------------------------
@@ -107,19 +108,61 @@ def main(cfg):
             step += 1
             # Fetch training data
             # need [img, label, pose(camera meta data), dataID]
-            img_all_view, labels, poses, data_id, mesh, features = data.fetch()
+            img_all_view, labels, poses, faces, data_id, mesh = data.fetch()
+            if isinstance(labels, np.lib.npyio.NpzFile):
+                if 'points' in labels:
+                    labels = labels['points']
+                elif 'xyz' in labels:
+                    labels = labels['xyz']
+                else:
+                    raise ValueError(f"No 'points' or 'xyz' key in label npz file: {data_id}")
+            
             feed_dict.update({placeholders['img_inp']: img_all_view})
-            feed_dict.update({placeholders['labels']: labels})
+            feed_dict.update({
+    placeholders['labels']: labels  # Already normalized in .npz
+})
+
+
             feed_dict.update({placeholders['cameras']: poses})
+            feed_dict.update({placeholders['faces'][0]: faces})  # or as needed for your model
+            print("labels shape:", labels.shape)
+            print("Sample label points:\n", labels[:5])
             # ---------------------------------------------------------------
             _, dists, summaries, out1, out3, out3 = sess.run([model.opt_op, model.loss, model.merged_summary_op, model.output1, model.output2, model.output3], feed_dict=feed_dict)
+            print("Expected label shape (should match vertex count):", labels.shape)
+            print("Expected prediction shape (out3):", out3.shape)
+
+            initial_verts = pkl['coord']  # Shape should be (156, 3) for the base ellipsoid
+            
             # ---------------------------------------------------------------
             all_loss[iters] = dists
             mean_loss = np.mean(all_loss[np.where(all_loss)])
             print('Epoch {}, Iteration {}, Mean loss = {}, iter loss = {}, {}, data id {}'.format(current_epoch, iters + 1, mean_loss, dists, data.queue.qsize(), data_id))
             train_writer.add_summary(summaries, step)
-            if (iters + 1) % 1000 == 0:
-                plot_scatter(pt=out3, data_name=data_id, plt_path=epoch_plt_dir)
+            if 1==1:
+                # === DEBUG OUTPUT ===
+                print("Shape of out3:", out3.shape)
+                print("X range:", np.min(out3[:, 0]), np.max(out3[:, 0]))
+                print("Y range:", np.min(out3[:, 1]), np.max(out3[:, 1]))
+                print("Z range:", np.min(out3[:, 2]), np.max(out3[:, 2]))
+                print("NaNs in out3:", np.isnan(out3).any())
+                print("All-zero vertices in out3:", np.all(out3 == 0, axis=1).sum())
+
+                # Plot model prediction
+                plot_scatter(pt=out3, data_name="pred_"+data_id, plt_path=epoch_plt_dir)
+                plot_scatter(initial_verts, data_name="init_ellipsoid.png", plt_path=epoch_plt_dir)
+               # diff = np.linalg.norm(out3 - initial_verts, axis=1)
+               # print("Initial difference from ellipsoid → mean: {:.6f}, min: {:.6f}, max: {:.6f}".format(
+               #     diff.mean(), diff.min(), diff.max()))
+
+
+
+                # Plot ground truth label
+                if labels.shape[1] >= 3:
+                    plot_scatter(pt=labels[:, :3], data_name='_label' + data_id, plt_path=epoch_plt_dir)
+                else:
+                    print("Warning: Labels do not contain XYZ coordinates.")
+
         # ---------------------------------------------------------------
         # Save model
         model.save(sess=sess, ckpt_path=model_dir, step=current_epoch)

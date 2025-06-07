@@ -105,6 +105,9 @@ def main(cfg):
         out3_path = os.path.join(predict_dir, data_id.replace('.dat', '_predict.xyz'))
         np.savetxt(out3_path, out2l)
 
+        # Plot prediction as a scatter plot
+        plot_scatter(pt=out2l, data_name=data_id, plt_path=predict_dir)
+
         print('Iteration {}/{}, Data id {}'.format(iters + 1, test_number, data_id))
 
     # ---------------------------------------------------------------

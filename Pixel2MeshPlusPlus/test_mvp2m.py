@@ -83,7 +83,7 @@ def main(cfg):
     for iters in range(test_number):
         # Fetch training data
         # need [img, label, pose(camera meta data), dataID]
-        img_all_view, labels, poses, data_id, mesh, feat = data.fetch()
+        img_all_view, labels, poses, data_id, mesh, verts, faces = data.fetch()
         feed_dict.update({placeholders['img_inp']: img_all_view})
         feed_dict.update({placeholders['labels']: labels})
         feed_dict.update({placeholders['cameras']: poses})
@@ -102,6 +102,9 @@ def main(cfg):
         # save 3
         out3_path = os.path.join(predict_dir, data_id.replace('.dat', '_predict.xyz'))
         np.savetxt(out3_path, out3)
+
+        # Plot prediction as a scatter plot
+        plot_scatter(pt=out3, data_name=data_id, plt_path=predict_dir)
 
         print('Iteration {}/{}, Data id {}'.format(iters + 1, test_number, data_id))
 
