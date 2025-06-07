@@ -85,7 +85,8 @@ def main(cfg):
     for iters in range(test_number):
         # Fetch training data
         # need [img, label, pose(camera meta data), dataID]
-        img_all_view, labels, poses, data_id, mesh, features = data.fetch()
+        img_all_view, labels, poses, faces, data_id, mesh = data.fetch()
+
         feed_dict.update({placeholders['img_inp']: img_all_view})
         feed_dict.update({placeholders['labels']: labels})
         feed_dict.update({placeholders['cameras']: poses})

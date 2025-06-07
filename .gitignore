@@ -78,15 +78,15 @@ InstantMesh/pollen/pollen_train/*
 
 InstantMesh/pollen/*
 Pixel_Nerf/pollen_augmented/**
-Pixel2MeshPlusPlus2/data/pollen/test/17767_Common_knapweed_Centaurea_nigra_pollen_grain_00/mesh/model.obj
-Pixel2MeshPlusPlus2/data/*.txt
+Pixel2MeshPlusPlus/data/pollen/test/17767_Common_knapweed_Centaurea_nigra_pollen_grain_00/mesh/model.obj
+Pixel2MeshPlusPlus/data/*.txt
 
-Pixel2MeshPlusPlus2/data/*.png
-Pixel2MeshPlusPlus2/data/*.npz
-Pixel2MeshPlusPlus2/*.obj
-Pixel2MeshPlusPlus2/*.txt
-Pixel2MeshPlusPlus2/data/pollen/**
-Pixel2MeshPlusPlus2/data/pollen_pretty_ggod/**
+Pixel2MeshPlusPlus/data/*.png
+Pixel2MeshPlusPlus/data/*.npz
+Pixel2MeshPlusPlus/*.obj
+Pixel2MeshPlusPlus/*.txt
+Pixel2MeshPlusPlus/data/pollen/**
+Pixel2MeshPlusPlus/data/pollen_pretty_ggod/**
 *.ckpt*
 init_elli
-Pixel2MeshPlusPlus2/results/coarse_mvp2m/plt_back/*/init_ellipsoid
+Pixel2MeshPlusPlus/results/coarse_mvp2m/plt_back/*/init_ellipsoid
