@@ -34,8 +34,7 @@ import util
 from data import get_split_dataset
 from model import make_model
 from render import NeRFRenderer
-from Eval.TestEvaluation.mesh_utils import MeshUtils
-
+from mesh_utils import MeshUtils
 
 class EvalMetricsRunner:
     def __init__(self):
@@ -153,7 +152,7 @@ class EvalMetricsRunner:
             self.extra_args,
             default_conf=r"C:\Users\super\Documents\Github\sequoia\Pixel_Nerf\conf\exp\pollen.conf",
             default_datadir=r"C:\Users\super\Documents\Github\sequoia\data\processed\pixelnerf\pollen",
-            default_expname="pollen",
+            default_expname="",
         )
         args.resume = True
         device = util.get_cuda(args.gpu_id[0])
@@ -267,6 +266,25 @@ class EvalMetricsRunner:
                     mesh_gt = MeshUtils.normalize_mesh(mesh_gt)
                     mesh_gt = mesh_gt.convex_hull
                     pts_gt, _ = trimesh.sample.sample_surface(mesh_gt, 5000)
+
+                    # --- ADD THIS: ENCODE IMAGES ---
+                    images = data["images"][0]
+                    poses = data["poses"][0]
+                    focal = data["focal"][0]
+                    if isinstance(focal, float):
+                        focal = torch.tensor(focal, dtype=torch.float32)
+                    focal = focal[None]
+                    c = data.get("c")
+                    if c is not None:
+                        c = c[0].to(device=device).unsqueeze(0)
+                    src_view = torch.tensor([0, 1], dtype=torch.long)
+                    net.encode(
+                        images[src_view].to(device).unsqueeze(0),
+                        poses[src_view].to(device).unsqueeze(0),
+                        focal.to(device),
+                        c=c,
+                    )
+                    # --- END ADD ---
                     break
             if pts_gt is not None:
                 for thresh in mesh_thresh_candidates:
@@ -278,7 +296,7 @@ class EvalMetricsRunner:
                             reso=[128, 128, 128],
                             isosurface=thresh,
                             sigma_idx=3,
-                            eval_batch_size=8192,  # <-- GOOD (must be divisible by 512)
+                            eval_batch_size=256,  # <-- GOOD (must be divisible by 512)
                             coarse=args.coarse,
                             device=device,
                         )
