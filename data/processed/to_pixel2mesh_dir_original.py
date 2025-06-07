@@ -7,15 +7,41 @@ import math
 import random
 from vtk.util import numpy_support
 import trimesh
+import open3d as o3d
 
 # === CONFIG ===
-MAX_SAMPLES = 2  # Set to None for all files, or an integer for a quick test
+MAX_SAMPLES = 207  # Set to None for all files, or an integer for a quick test
 
 # Use absolute path for interim folder
 input_folder = r"C:\Users\super\Documents\Github\sequoia\data\processed\interim"
 output_root_folder = (
     r"C:\Users\super\Documents\Github\sequoia\data\processed\pixel2mesh_original"
 )
+
+def normalize_mesh(mesh):
+    vertices = np.asarray(mesh.vertices)
+    
+    center = np.mean(vertices, axis=0)
+    vertices -= center
+
+    scale = np.max(np.linalg.norm(vertices, axis=1))
+    vertices /= scale
+
+    mesh.vertices = o3d.utility.Vector3dVector(vertices)
+
+    # ✅ Check if normalized
+    new_center = np.mean(vertices, axis=0)
+    max_radius = np.max(np.linalg.norm(vertices, axis=1))
+
+    print(f"   🔎 Mesh center after normalization: {new_center}")
+    print(f"   🔎 Max vertex norm (should be ~1): {max_radius:.6f}")
+    if np.allclose(new_center, np.zeros(3), atol=1e-3) and np.isclose(max_radius, 1.0, atol=1e-3):
+        print("   ✅ Mesh is centered and normalized.")
+    else:
+        print("   ❌ Mesh normalization issue detected!")
+
+    return mesh
+
 
 
 def get_camera_positions(num_views=8, distance=2.5):
@@ -68,6 +94,7 @@ def render_multiview_data(
     mesh_dir = os.path.join(output_dir, "mesh")
     os.makedirs(mesh_dir, exist_ok=True)
 
+    # === Load and normalize STL mesh ===
     reader = vtk.vtkSTLReader()
     reader.SetFileName(mesh_path)
     reader.Update()
@@ -88,6 +115,8 @@ def render_multiview_data(
             f"❌ Warning: Mesh {os.path.basename(mesh_path)} has zero size and will be skipped."
         )
         return
+
+    # === Normalize with VTK ===
     transform = vtk.vtkTransform()
     transform.Translate(-center[0], -center[1], -center[2])
     transform.Scale(1.0 / scale, 1.0 / scale, 1.0 / scale)
@@ -97,12 +126,59 @@ def render_multiview_data(
     transform_filter.Update()
     normalized_polydata = transform_filter.GetOutput()
 
-    # Save normalized mesh as OBJ in mesh_dir
-    obj_path = os.path.join(mesh_dir, "model.obj")
-    save_mesh_as_obj(normalized_polydata, obj_path)
+    # === Convert to Trimesh & simplify ===
+    vertices = numpy_support.vtk_to_numpy(normalized_polydata.GetPoints().GetData())
+    faces_raw = numpy_support.vtk_to_numpy(normalized_polydata.GetPolys().GetData())
+    faces = faces_raw.reshape(-1, 4)[:, 1:]
+
+    # Pad triangle faces to (N, 4) with 0 for mesh processing (trimesh/open3d)
+    if faces.shape[1] == 3:
+        faces_proc = np.pad(faces, ((0, 0), (0, 1)), mode='constant', constant_values=0)
+    else:
+        faces_proc = faces
+
+    try:
+        # Use only the first 3 columns for trimesh (triangles)
+        mesh_tm = trimesh.Trimesh(vertices=vertices, faces=faces_proc[:, :3], process=False)
+        mesh_o3d = o3d.geometry.TriangleMesh()
+        mesh_o3d.vertices = o3d.utility.Vector3dVector(vertices)
+        mesh_o3d.triangles = o3d.utility.Vector3iVector(faces_proc[:, :3])
+        mesh_o3d = mesh_o3d.simplify_quadric_decimation(320)
+        mesh_o3d = normalize_mesh(mesh_o3d)  # ✅ Use your function here
+        mesh_o3d.compute_vertex_normals()
+
+        vertices = np.asarray(mesh_o3d.vertices)
+        faces_simple = np.asarray(mesh_o3d.triangles)
+        normals = np.asarray(mesh_o3d.vertex_normals)
+        normals /= np.linalg.norm(normals, axis=1, keepdims=True) + 1e-9
+        
+        # After simplification, pad faces again if needed (for saving)
+        if faces_simple.shape[1] == 3:
+            faces_save = np.pad(faces_simple, ((0, 0), (0, 1)), mode='constant', constant_values=-1)
+        else:
+            faces_save = faces_simple
+    except Exception as e:
+        print(f"❌ Mesh simplification failed: {e}")
+        return
+
+    # === Save .obj of simplified mesh ===
+    simplified_mesh = trimesh.Trimesh(vertices=vertices, faces=faces_simple, process=False)
+    simplified_mesh.export(os.path.join(mesh_dir, "model.obj"))
+
+    # === Use simplified mesh for VTK rendering ===
+    vtk_points = vtk.vtkPoints()
+    vtk_points.SetData(numpy_support.numpy_to_vtk(vertices))
+    vtk_cells = vtk.vtkCellArray()
+    for face in faces_simple:
+        vtk_cells.InsertNextCell(3)
+        for idx in face:
+            vtk_cells.InsertCellPoint(idx)
+    vtk_polydata = vtk.vtkPolyData()
+    vtk_polydata.SetPoints(vtk_points)
+    vtk_polydata.SetPolys(vtk_cells)
 
     mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputData(normalized_polydata)
+    mapper.SetInputData(vtk_polydata)
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
     renderer = vtk.vtkRenderer()
@@ -112,11 +188,12 @@ def render_multiview_data(
     render_window.SetOffScreenRendering(1)
     render_window.AddRenderer(renderer)
     render_window.SetSize(*image_size)
-    camera_positions = get_camera_positions(num_views)
-    all_camera_meta = []
+
+    # === Render views ===
     rendering_dir = os.path.join(output_dir, "rendering")
     os.makedirs(rendering_dir, exist_ok=True)
-    images = []  # <-- Collect images here
+    all_camera_meta = []
+    camera_positions = get_camera_positions(num_views)
     for i, (position, angles) in enumerate(camera_positions):
         camera = renderer.GetActiveCamera()
         camera.SetPosition(position)
@@ -125,18 +202,19 @@ def render_multiview_data(
         renderer.ResetCamera()
         renderer.ResetCameraClippingRange()
         render_window.Render()
+
         window_to_image_filter = vtk.vtkWindowToImageFilter()
         window_to_image_filter.SetInput(render_window)
         window_to_image_filter.SetInputBufferTypeToRGB()
         window_to_image_filter.ReadFrontBufferOff()
         window_to_image_filter.Update()
+
         vtk_image = window_to_image_filter.GetOutput()
         dims = vtk_image.GetDimensions()
         vtk_array = vtk_image.GetPointData().GetScalars()
         numpy_image = numpy_support.vtk_to_numpy(vtk_array).reshape(dims[1], dims[0], 3)
         image_path = os.path.join(rendering_dir, f"{i:02d}.png")
         plt.imsave(image_path, np.flipud(numpy_image))
-        images.append(np.flipud(numpy_image).astype(np.uint8))  # <-- Collect image
         camera_meta = [
             angles[0],
             angles[1],
@@ -145,43 +223,23 @@ def render_multiview_data(
             camera.GetViewAngle(),
         ]
         all_camera_meta.append(camera_meta)
-    metadata_path = os.path.join(rendering_dir, "rendering_metadata.txt")
-    np.savetxt(metadata_path, np.array(all_camera_meta), fmt="%f")
-    vertices = numpy_support.vtk_to_numpy(normalized_polydata.GetPoints().GetData())
-    faces_vtk = numpy_support.vtk_to_numpy(normalized_polydata.GetPolys().GetData())
-    faces = faces_vtk.reshape(-1, 4)[:, 1:]
 
-    # Pad triangle faces to (N, 4) with -1 for compatibility with the model
-    if faces.shape[1] == 3:
-        faces_padded = np.pad(faces, ((0, 0), (0, 1)), mode='constant', constant_values=0)  # pad with 0 for trimesh
-        mask = np.ones(faces_padded.shape, dtype=bool)
-        mask[:, 3] = False  # last column is padding
-    else:
-        faces_padded = faces
-        mask = np.ones(faces_padded.shape, dtype=bool)
+    np.savetxt(
+        os.path.join(rendering_dir, "rendering_metadata.txt"),
+        np.array(all_camera_meta),
+        fmt="%f",
+    )
 
-    # === Compute normals with trimesh ===
-    # Only use the first 3 columns for trimesh
-    mesh_tm = trimesh.Trimesh(vertices=vertices, faces=faces_padded[:, :3], process=False)
-    normals = mesh_tm.vertex_normals  # shape (N, 3)
-
-    # Restore -1 padding for saving
-    faces_save = faces_padded.copy()
-    if faces_save.shape[1] == 4:
-        faces_save[:, 3][~mask[:, 3]] = -1
-
-    # Debugging output
+    # === Save npz file ===
     print("DEBUG points shape:", vertices.shape)
     print("DEBUG normals shape:", normals.shape)
     if normals.shape[0] != vertices.shape[0]:
-        print(f"❌ Normals/points count mismatch for {dat_path}: {normals.shape[0]} vs {vertices.shape[0]}")
+        print(f"❌ Normals/points count mismatch for {dat_path}")
         return
 
-    # Use pollen_id from dat_path
     pollen_id = os.path.splitext(os.path.basename(dat_path))[0]
-
     np.savez_compressed(
-        dat_path.replace('.dat', '.npz'),
+        dat_path.replace(".dat", ".npz"),
         name=pollen_id,
         points=vertices.astype(np.float32),
         faces=faces_save.astype(np.int32),
@@ -208,7 +266,7 @@ if __name__ == "__main__":
 
     # Always use _00 for postfix
     all_npz = [f"pollen_{id}_00.npz" for id in all_ids]
-    all_dirs = [f"pollen_{id}_00" for id in all_ids]
+    all_dirs = [f"{id}_00" for id in all_ids]  # <-- Remove pollen_ prefix here
 
     combined = list(zip(all_ids, all_npz, all_dirs))
     random.shuffle(combined)
@@ -237,7 +295,7 @@ if __name__ == "__main__":
                 continue
             # Output directory and .npz path both use _00 postfix
             output_model_dir = os.path.join(split_dir, dir_name)
-            dat_path = os.path.join(split_dir, npz_name.replace('.npz', '.dat'))
+            dat_path = os.path.join(split_dir, npz_name.replace(".npz", ".dat"))
             try:
                 print(f"🔄 Processing {split_name}/{pollen_id}...")
                 render_multiview_data(
