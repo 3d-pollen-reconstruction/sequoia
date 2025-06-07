@@ -30,6 +30,7 @@ __pycache__/
 **.npz
 */.jupyter_cache
 sequoia/Pixel2MeshPlusPlus/data/pollen/*
+
 lightning_logs/
 wandb/
 *.ckpt
@@ -77,3 +78,8 @@ InstantMesh/pollen/pollen_train/*
 
 InstantMesh/pollen/*
 Pixel_Nerf/pollen_augmented/**
+Pixel2MeshPlusPlus2/data/pollen/test/17767_Common_knapweed_Centaurea_nigra_pollen_grain_00/mesh/model.obj
+Pixel2MeshPlusPlus2/data/*.txt
+
+Pixel2MeshPlusPlus2/data/*.png
+Pixel2MeshPlusPlus2/data/*.npz
