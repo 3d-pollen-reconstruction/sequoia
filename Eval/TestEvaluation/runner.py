@@ -11,7 +11,7 @@ import time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../MeshGenerator/src")))
 from mesh_utils import MeshUtils
 
-# Config
+# Config set these paths according to your environment
 PRED_ROOT = r"C:\Users\super\Documents\Github\sequoia\Eval\data"
 GT_ROOT = r"C:\Users\super\Documents\Github\sequoia\data\processed\interim"
 GT_ROOT_AUG = r"C:\Users\super\Documents\Github\sequoia\data\processed\augmented"
