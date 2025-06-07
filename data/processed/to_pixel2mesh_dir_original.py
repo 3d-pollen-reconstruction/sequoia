@@ -8,6 +8,7 @@ import random
 from vtk.util import numpy_support
 import trimesh
 import open3d as o3d
+import json
 
 # === CONFIG ===
 MAX_SAMPLES = 207  # Set to None for all files, or an integer for a quick test
@@ -261,31 +262,41 @@ if __name__ == "__main__":
     category_folder = os.path.join(output_root_folder, category_name)
     os.makedirs(category_folder, exist_ok=True)
 
+    # Load splits from JSON
+    splits_json_path = r"c:\Users\super\Documents\Github\shapenet_renderer\128_views\pollen_augmented\splits.json"
+    with open(splits_json_path, "r") as f:
+        splits = json.load(f)
+
+    # Map STL filename (with .stl) to id (without .stl)
     all_stl = [f for f in os.listdir(input_folder) if f.endswith(".stl")]
-    all_ids = [os.path.splitext(f)[0] for f in all_stl]
+    all_ids = {f: os.path.splitext(f)[0] for f in all_stl}
 
-    # Always use _00 for postfix
-    all_npz = [f"pollen_{id}_00.npz" for id in all_ids]
-    all_dirs = [f"{id}_00" for id in all_ids]  # <-- Remove pollen_ prefix here
-
-    combined = list(zip(all_ids, all_npz, all_dirs))
-    random.shuffle(combined)
-    if MAX_SAMPLES is not None:
-        combined = combined[:MAX_SAMPLES]
-    split_idx = int(0.7 * len(combined))
-    train = combined[:split_idx]
-    test = combined[split_idx:]
+    # Prepare split dict: split_name -> list of (id, npz_name, dir_name)
+    split_dict = {}
+    for split_name in ["train", "val", "test"]:
+        split_files = splits.get(split_name, [])
+        split_items = []
+        for stl_file in split_files:
+            if stl_file not in all_ids:
+                print(f"❌ STL file listed in split but not found: {stl_file}")
+                continue
+            id = all_ids[stl_file]
+            npz_name = f"pollen_{id}_00.npz"
+            dir_name = f"{id}_00"
+            split_items.append((id, npz_name, dir_name))
+        split_dict[split_name] = split_items
 
     # Write split files with .npz filenames
-    write_split_file(
-        [npz for _, npz, _ in train], os.path.join(category_folder, "train_split.txt")
-    )
-    write_split_file(
-        [npz for _, npz, _ in test], os.path.join(category_folder, "test_split.txt")
-    )
+    for split_name in ["train", "val", "test"]:
+        split_items = split_dict[split_name]
+        write_split_file(
+            [npz for _, npz, _ in split_items],
+            os.path.join(category_folder, f"{split_name}_split.txt"),
+        )
 
-    splits = [("train", train), ("test", test)]
-    for split_name, split_items in splits:
+    # Process each split
+    for split_name in ["train", "val", "test"]:
+        split_items = split_dict[split_name]
         split_dir = os.path.join(category_folder, split_name)
         os.makedirs(split_dir, exist_ok=True)
         for pollen_id, npz_name, dir_name in split_items:
@@ -293,7 +304,6 @@ if __name__ == "__main__":
             if not os.path.exists(mesh_path):
                 print(f"❌ Mesh file not found: {mesh_path}")
                 continue
-            # Output directory and .npz path both use _00 postfix
             output_model_dir = os.path.join(split_dir, dir_name)
             dat_path = os.path.join(split_dir, npz_name.replace(".npz", ".dat"))
             try:
