@@ -144,7 +144,7 @@ def render_multiview_data(
         mesh_o3d = o3d.geometry.TriangleMesh()
         mesh_o3d.vertices = o3d.utility.Vector3dVector(vertices)
         mesh_o3d.triangles = o3d.utility.Vector3iVector(faces_proc[:, :3])
-        mesh_o3d = mesh_o3d.simplify_quadric_decimation(320)
+        mesh_o3d = mesh_o3d.simplify_quadric_decimation(5000)
         mesh_o3d = normalize_mesh(mesh_o3d)  # ✅ Use your function here
         mesh_o3d.compute_vertex_normals()
 

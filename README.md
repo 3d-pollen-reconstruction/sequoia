@@ -32,7 +32,7 @@ To run training jobs on a SLURM-managed cluster, use the provided Singularity co
 # Optional: Load modules
 # module load singularity
 
-export WANDB_API_KEY=57ec91b771b38d635cbbcf795a35d72a0c9c85cc
+export WANDB_API_KEY=XXXX
 
 singularity exec --nv \
   --bind /home2/etienne.roulet/checkpoints:/container/checkpoints \
