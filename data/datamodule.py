@@ -14,6 +14,7 @@ class PollenDataModule(pl.LightningDataModule):
         self,
         batch_size: int,
         num_workers: int = 4,
+        n_images: int = 2,
         image_transforms=None,
         include_augmentations: bool = True,
     ):
@@ -23,6 +24,7 @@ class PollenDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.image_transforms = image_transforms
         self.include_augmentations = include_augmentations
+        self.n_images = n_images
 
         self.train_dataset = None
         self.val_dataset = None
@@ -39,6 +41,7 @@ class PollenDataModule(pl.LightningDataModule):
         train_ds, val_ds, test_ds = make_splits_from_json(
             split_json_path=split_json_path,
             image_transforms=self.image_transforms,
+            n_images=self.n_images,
             include_augmentations=self.include_augmentations,
         )
 

@@ -57,6 +57,7 @@ def list_files_of_type(
 def make_splits_from_json(
     split_json_path: str,
     image_transforms=None,
+    n_images: int = 2,
     device: torch.device = torch.device("cpu"),
     include_augmentations: bool = True,
 ) -> tuple[PollenDataset, PollenDataset, PollenDataset]:
@@ -107,16 +108,19 @@ def make_splits_from_json(
 
     train_ds = PollenDataset(
         image_transforms=image_transforms,
+        n_images=n_images,
         device=device,
         file_list=train_stems
     )
     val_ds = PollenDataset(
         image_transforms=image_transforms,
+        n_images=n_images,
         device=device,
         file_list=val_stems
     )
     test_ds = PollenDataset(
         image_transforms=image_transforms,
+        n_images=n_images,
         device=device,
         file_list=test_stems
     )

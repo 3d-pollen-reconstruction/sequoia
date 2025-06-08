@@ -7,6 +7,7 @@ image_transforms:
       size: [128, 128]
     - _target_: torchvision.transforms.ToTensor
 
+n_images: 2
 batch_size: 8
 num_workers: 4
 include_augmentations: false
