@@ -1,0 +1,18 @@
+Net refine_p2mpp | Start training | lr =  1e-05
+Net refine_p2mpp | Start training | lr =  1e-05
+Net refine_p2mpp | Start training | lr =  1e-05
+Epoch 26, loss 0
+Epoch 27, loss 0
+Epoch 28, loss 0
+Epoch 29, loss 0
+Epoch 30, loss 0
+Epoch 31, loss 0
+Epoch 32, loss 0
+Epoch 33, loss 0
+Epoch 34, loss 0
+Epoch 35, loss 0
+Net refine_p2mpp | Start training | lr =  1e-05
+Epoch 26, loss 207.62384033203125
+Epoch 27, loss 207.55455017089844
+Epoch 28, loss 207.58880615234375
+Epoch 29, loss 207.4185791015625

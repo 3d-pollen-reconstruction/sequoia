@@ -109,8 +109,26 @@ def main(cfg):
         mean_loss = 0
         all_loss = np.zeros(train_number, dtype='float32')
         for iters in range(train_number):
-            step += 1
-            img_all_view, labels, poses, data_id, mesh, feat = data.fetch()
+            result = data.fetch()
+            if result is None:
+                print("Skipping sample due to missing mesh or error.")
+                continue
+            img_all_view, labels, poses, faces, data_id, mesh = result  # <-- FIXED ORDER
+
+            # Check types
+            if isinstance(mesh, str):
+                print(f"ERROR: mesh is a string for {data_id}, skipping.")
+                continue
+            if isinstance(img_all_view, str):
+                print(f"ERROR: img_all_view is a string for {data_id}, skipping.")
+                continue
+            if isinstance(labels, str):
+                print(f"ERROR: labels is a string for {data_id}, skipping.")
+                continue
+            if isinstance(poses, str):
+                print(f"ERROR: poses is a string for {data_id}, skipping.")
+                continue
+
             # Handle .npz label files if needed
             if isinstance(labels, np.lib.npyio.NpzFile):
                 if 'points' in labels:
@@ -130,7 +148,7 @@ def main(cfg):
             mean_loss = np.mean(all_loss[np.where(all_loss)])
             print('Epoch {}, Iteration {}, Mean loss = {}, iter loss = {}, {}, data id {}'.format(current_epoch, iters + 1, mean_loss, dists, data.queue.qsize(), data_id))
             train_writer.add_summary(summaries, step)
-            if (iters + 1) % 1000 == 0:
+            if (iters + 1) % 100 == 0:
                 plot_scatter(pt=out2l, data_name=data_id, plt_path=epoch_plt_dir)
         # ---------------------------------------------------------------
         # Save model

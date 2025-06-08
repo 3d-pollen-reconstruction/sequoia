@@ -69,7 +69,12 @@ class DataFetcher(threading.Thread):
 
             camera_meta_path = os.path.join(img_path, 'rendering_metadata.txt')
             if self.mesh_root is not None:
-                mesh = np.loadtxt(os.path.join(self.mesh_root, category + '_' + item_id + '_00_predict.xyz'))
+                base_name = os.path.splitext(pkl_item)[0]  # removes .npz
+                mesh_path = os.path.join(self.mesh_root, base_name + '_predict.xyz')
+                if not os.path.exists(mesh_path):
+                    print(f"Warning: {mesh_path} not found. Skipping sample {pkl_item}.")
+                    return None
+                mesh = np.loadtxt(mesh_path)
             else:
                 mesh = None
             imgs = np.zeros((3, 224, 224, 3))
