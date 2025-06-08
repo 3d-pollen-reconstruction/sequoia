@@ -144,12 +144,22 @@ def main(cfg):
             # ---------------------------------------------------------------
             _, dists, summaries, out1l, out2l = sess.run([model.opt_op, model.loss, model.merged_summary_op, model.output1l, model.output2l], feed_dict=feed_dict)
             # ---------------------------------------------------------------
+            print(f"Data id: {data_id}")
+            print("First 3 input mesh vertices:", mesh[:3])
+            print("First 3 input image pixels (view 0):", img_all_view[0, :2, :2, 0])  # shape: (3,224,224,3)
+            print("First 3 label points:", labels[:3])
+            print("First 3 predicted points:", out2l[:3])
+            # ---------------------------------------------------------------
             all_loss[iters] = dists
             mean_loss = np.mean(all_loss[np.where(all_loss)])
             print('Epoch {}, Iteration {}, Mean loss = {}, iter loss = {}, {}, data id {}'.format(current_epoch, iters + 1, mean_loss, dists, data.queue.qsize(), data_id))
             train_writer.add_summary(summaries, step)
-            if (iters + 1) % 100 == 0:
+            if (iters + 1) % 20 == 0:
                 plot_scatter(pt=out2l, data_name=data_id, plt_path=epoch_plt_dir)
+                #np.save(os.path.join(epoch_plt_dir, f"{data_id}_pred.xyz"), out2l)
+                np.savetxt(os.path.join(epoch_plt_dir, f"{data_id}_pred.xyz"), out2l)
+
+
         # ---------------------------------------------------------------
         # Save model
         model.save(sess=sess, ckpt_path=model_dir, step=current_epoch)

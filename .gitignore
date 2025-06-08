@@ -93,3 +93,5 @@ Pixel2MeshPlusPlus/results/coarse_mvp2m/plt_back/*/init_ellipsoid
 Pixel2MeshPlusPlus/results/coarse_mvp2m/coarse_intermediate/25/
 *.xyz
 checkpoint*
+Pixel2MeshPlusPlus/results/refine_p2mpp/plt/*
+Pixel2MeshPlusPlus/results/refine_p2mpp/summaries/events.out.tfevents.1749345670.server0092train

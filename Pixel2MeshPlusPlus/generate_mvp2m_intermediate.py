@@ -107,6 +107,9 @@ def main(cfg):
         np.savetxt(out3_path, out3)
 
         print('Iteration {}/{}, Data id {}'.format(iters + 1, test_number, data_id))
+        print("Sample data_id:", data_id)
+        print("First 3 label points:", labels[:3])
+        print("First 3 predicted points:", out3[:3])
 
     # ---------------------------------------------------------------
     data.shutdown()
