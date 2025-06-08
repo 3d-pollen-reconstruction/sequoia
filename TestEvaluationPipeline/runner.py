@@ -12,7 +12,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../Mesh
 from mesh_utils import MeshUtils
 
 # Config set these paths according to your environment
-PRED_ROOT = r"C:\Users\super\Documents\Github\sequoia\Eval\data"
+PRED_ROOT = r"C:\Users\super\Documents\Github\sequoia\TestEvaluationPipeline\data"
 GT_ROOT = r"C:\Users\super\Documents\Github\sequoia\data\processed\interim"
 GT_ROOT_AUG = r"C:\Users\super\Documents\Github\sequoia\data\processed\augmented"
 CSV_SAVE_PATH = r"C:\Users\super\Documents\Github\sequoia\Eval\TestEvaluation\mesh_eval_results.csv"

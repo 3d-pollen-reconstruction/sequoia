@@ -1,8 +1,3 @@
-"""
-Full evaluation script, including PSNR+SSIM evaluation with multi-GPU support.
-Converted into classes, keeping the logic unchanged.
-"""
-
 import sys
 import os
 import open3d as o3d
@@ -39,6 +34,7 @@ from mesh_utils import MeshUtils
 class EvalMetricsRunner:
     def __init__(self):
         self.best_mesh_thresh = None  # Store the best threshold
+        self.mesh_results = []        # Store mesh results for plotting
 
     def extra_args(self, parser):
         parser.add_argument("--split", type=str, default="test", help="Split of data")
@@ -245,7 +241,7 @@ class EvalMetricsRunner:
         total_objs = len(data_loader)
 
         best_mesh_thresh = None
-        mesh_thresh_candidates = [0.1, 0.5, 1.0, 2.0, 2.5, 3.0, 5.0, 6.0, 7.0, 8.0, 10.0]
+        mesh_thresh_candidates = [0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
 
         # --- Mesh threshold search: only ONCE for the whole test set ---
         if args.gen_meshes and args.find_best_mesh_thresh:
@@ -296,7 +292,7 @@ class EvalMetricsRunner:
                             reso=[128, 128, 128],
                             isosurface=thresh,
                             sigma_idx=3,
-                            eval_batch_size=256,  # <-- GOOD (must be divisible by 512)
+                            eval_batch_size=256,
                             coarse=args.coarse,
                             device=device,
                         )
@@ -567,10 +563,8 @@ class EvalMetricsRunner:
                 if args.gen_meshes:
                     from util.recon import marching_cubes, save_obj
 
-                    # Use the searched threshold if available, otherwise fallback
                     mesh_thresh_to_use = best_mesh_thresh if best_mesh_thresh is not None else args.mesh_thresh
 
-                    # --- Use mesh_thresh_to_use for all objects ---
                     try:
                         print(f"Extracting mesh using marching_cubes (thresh={mesh_thresh_to_use})...")
                         output = marching_cubes(
@@ -604,9 +598,18 @@ class EvalMetricsRunner:
                             )
                         if has_output:
                             safe_obj_name = safe_filename(obj_name)
-                            mesh_out_file = os.path.join(output_dir, f"{args.expname}_{safe_obj_name}.obj")
-                            save_obj(mesh_out_file, verts, tris)
+                            checkpoints_dir = getattr(args, "checkpoints_path", None)
+                            if checkpoints_dir:
+                                checkpoint_name = os.path.basename(os.path.normpath(checkpoints_dir))
+                            else:
+                                checkpoint_name = "model"
+
+                            mesh_out_file = os.path.join(output_dir, f"{safe_obj_name}.obj")
+                            save_obj(verts, tris, mesh_out_file)
                             print(f"Mesh gespeichert unter: {mesh_out_file}")
+
+                            # --- Store results for plotting ---
+                            self.mesh_results.append((checkpoint_name, obj_name, chamfer, output_dir))
                     except Exception as e:
                         print(f"Fehler beim Extrahieren der Meshes: {e}")
                         import traceback
@@ -620,6 +623,36 @@ class EvalMetricsRunner:
             print("Evaluation abgeschlossen. Ergebnisse in", output_dir)
         else:
             print("Evaluation abgeschlossen.")
+
+        # --- Plot and save mesh results ---
+        if self.mesh_results:
+            from collections import defaultdict
+            grouped = defaultdict(list)
+            for prefix, obj_name, chamfer, out_dir in self.mesh_results:
+                grouped[prefix].append((obj_name, chamfer, out_dir))
+
+            for prefix, results in grouped.items():
+                obj_names = [x[0] for x in results]
+                chamfers = [x[1] for x in results]
+                out_dir = results[0][2] if results else output_dir
+                print(f"\nCheckpoint: {prefix}")
+                for obj, ch in zip(obj_names, chamfers):
+                    print(f"  {obj}: Chamfer {ch:.6f}")
+
+                # Save plot and PNG in checkpoint folder
+                plot_dir = os.path.join(out_dir, f"{prefix}_plots")
+                os.makedirs(plot_dir, exist_ok=True)
+                plt.figure(figsize=(max(8, len(obj_names) * 0.5), 4))
+                plt.bar(obj_names, chamfers)
+                plt.title(f"Chamfer Distance per Object - {prefix}")
+                plt.ylabel("Chamfer Distance")
+                plt.xlabel("Object")
+                plt.xticks(rotation=90)
+                plt.tight_layout()
+                plot_path = os.path.join(plot_dir, f"{prefix}_chamfer.png")
+                plt.savefig(plot_path)
+                plt.close()
+                print(f"Chamfer plot saved to: {plot_path}")
 
 def safe_filename(name):
     # Replace any non-ASCII or problematic characters with underscore
