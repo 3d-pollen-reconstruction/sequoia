@@ -6,16 +6,49 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
 import time
-
-# Add MeshUtils to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../MeshGenerator/src")))
+from dotenv import load_dotenv
 from mesh_utils import MeshUtils
 
-# Config set these paths according to your environment
-PRED_ROOT = r"C:\Users\super\Documents\Github\sequoia\TestEvaluationPipeline\data"
-GT_ROOT = r"C:\Users\super\Documents\Github\sequoia\data\processed\interim"
-GT_ROOT_AUG = r"C:\Users\super\Documents\Github\sequoia\data\processed\augmented"
-CSV_SAVE_PATH = r"C:\Users\super\Documents\Github\sequoia\Eval\TestEvaluation\mesh_eval_results.csv"
+# --- Load environment variables from .env at the repo root ---
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+print(f"Loading environment variables from {repo_root}/.env")
+dotenv_path = os.path.join(repo_root, ".env")
+env_loaded = load_dotenv(dotenv_path)
+
+
+
+
+def print_example_env():
+    print("\nExample .env file (place at the root of your repository):\n")
+    print("""DATA_DIR_PATH = 'C:/Users/example/Documents/GitHub/sequoia/data'
+PIXEL_NERF_CONF_DIR = 'C:/Users/example/Documents/GitHub/sequoia/Pixel_Nerf/expconf.conf'
+
+CHECKPOINTS_ROOT = 'C:/Users/example/Documents/Github/sequoia/Pixel_Nerf/checkpoints'
+CONF_MAP_PATH = 'C:/Users/example/Documents/Github/sequoia/Eval/MeshGenerator/src/checkpoint_conf_map.json'
+DATADIR = 'C:/Users/example/Documents/Github/shapenet_renderer/128_views/pollen_augmented'
+OUTPUT_ROOT = 'C:/Users/example/Documents/Github/sequoia/Pixel_Nerf/eval/reconstructed'
+PIXELNERF_SCRIPT = 'C:/Users/example/Documents/Github/sequoia/Eval/MeshGenerator/src/pixelnerf.py'
+
+PRED_ROOT = 'C:/Users/example/Documents/Github/sequoia/TestEvaluationPipeline/data'
+GT_ROOT = 'C:/Users/example/Documents/Github/sequoia/data/processed/interim'
+GT_ROOT_AUG = 'C:/Users/example/Documents/Github/sequoia/data/processed/augmented'
+CSV_SAVE_PATH = 'C:/Users/example/Documents/Github/sequoia/Eval/TestEvaluation/mesh_eval_results.csv'
+""")
+
+# Read from .env or print example if not found
+def get_env_var(key):
+    val = os.getenv(key)
+    if val is None:
+        print(f"Environment variable '{key}' not found.")
+        print_example_env()
+        exit(1)
+    return val.strip("'")
+
+PRED_ROOT = get_env_var("PRED_ROOT")
+GT_ROOT = get_env_var("GT_ROOT")
+GT_ROOT_AUG = get_env_var("GT_ROOT_AUG")
+CSV_SAVE_PATH = get_env_var("CSV_SAVE_PATH")
+
 
 GREEN = "\033[92m"
 BLUE = "\033[94m"
