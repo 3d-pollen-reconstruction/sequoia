@@ -94,7 +94,7 @@ def main(cfg):
         out1, out2, out3 = sess.run([model.output1, model.output2, model.output3], feed_dict=feed_dict)
         # ---------------------------------------------------------------
         # save GT
-        label_path = os.path.join(predict_dir, data_id.replace('.dat', '_ground.xyz'))
+        label_path = os.path.join(predict_dir, data_id.replace('.npz', '_ground.xyz'))
         np.savetxt(label_path, labels)
         # save 1
         # out1_path = os.path.join(predict_dir, data_id.replace('.dat', '_predict_1.xyz'))
@@ -103,7 +103,7 @@ def main(cfg):
         # out2_path = os.path.join(predict_dir, data_id.replace('.dat', '_predict_2.xyz'))
         # np.savetxt(out2_path, out2)
         # save 3
-        out3_path = os.path.join(predict_dir, data_id.replace('.dat', '_predict.xyz'))
+        out3_path = os.path.join(predict_dir, data_id.replace('.npz', '_predict.xyz'))
         np.savetxt(out3_path, out3)
 
         print('Iteration {}/{}, Data id {}'.format(iters + 1, test_number, data_id))

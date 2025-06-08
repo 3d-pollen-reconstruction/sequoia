@@ -1,8 +1,8 @@
 lr: 1e-5
-init_epoch: 0
+init_epoch: 25
 epochs: 300
-test_epoch: 300
-restore: false
+test_epoch: 25
+restore: true
 gpu_id: 0
 is_debug: yes
 feat_dim: 2883

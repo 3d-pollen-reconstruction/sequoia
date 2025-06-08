@@ -92,3 +92,4 @@ init_elli
 Pixel2MeshPlusPlus/results/coarse_mvp2m/plt_back/*/init_ellipsoid
 Pixel2MeshPlusPlus/results/coarse_mvp2m/coarse_intermediate/25/
 *.xyz
+checkpoint*

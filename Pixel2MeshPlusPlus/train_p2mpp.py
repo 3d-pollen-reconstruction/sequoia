@@ -110,9 +110,15 @@ def main(cfg):
         all_loss = np.zeros(train_number, dtype='float32')
         for iters in range(train_number):
             step += 1
-            # Fetch training data
-            # need [img, label, pose(camera meta data), dataID]
             img_all_view, labels, poses, data_id, mesh, feat = data.fetch()
+            # Handle .npz label files if needed
+            if isinstance(labels, np.lib.npyio.NpzFile):
+                if 'points' in labels:
+                    labels = labels['points']
+                elif 'xyz' in labels:
+                    labels = labels['xyz']
+                else:
+                    raise ValueError(f"No 'points' or 'xyz' key in label npz file: {data_id}")
             feed_dict.update({placeholders['features']: mesh})
             feed_dict.update({placeholders['img_inp']: img_all_view})
             feed_dict.update({placeholders['labels']: labels})
