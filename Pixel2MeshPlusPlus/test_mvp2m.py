@@ -6,13 +6,12 @@ import tflearn
 import numpy as np
 import pprint
 import pickle
-import shutil
 import os
 
 from modules.models_mvp2m import MeshNetMVP2M
-from modules.config import execute
 from utils.dataloader import DataFetcher
 from utils.tools import construct_feed_dict
+from modules.config import execute
 from utils.visualize import plot_scatter
 
 
@@ -20,7 +19,7 @@ def main(cfg):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(cfg.gpu_id)
     # ---------------------------------------------------------------
     # Set random seed
-    print('=> pre-porcessing')
+    print('=> pre-processing')
     seed = 123
     np.random.seed(seed)
     tf.set_random_seed(seed)
@@ -81,30 +80,37 @@ def main(cfg):
     tflearn.is_training(False, sess)
     print('=> start test stage 1')
     for iters in range(test_number):
-        # Fetch training data
-        # need [img, label, pose(camera meta data), dataID]
-        img_all_view, labels, poses, data_id, mesh, verts, faces = data.fetch()
+        # Fetch test data (new format: img, label, pose, faces, data_id, mesh)
+        img_all_view, labels, poses, faces, data_id, mesh = data.fetch()
+        if isinstance(labels, np.lib.npyio.NpzFile):
+            if 'points' in labels:
+                labels = labels['points']
+            elif 'xyz' in labels:
+                labels = labels['xyz']
+            else:
+                raise ValueError(f"No 'points' or 'xyz' key in label npz file: {data_id}")
+
         feed_dict.update({placeholders['img_inp']: img_all_view})
         feed_dict.update({placeholders['labels']: labels})
         feed_dict.update({placeholders['cameras']: poses})
-        # ---------------------------------------------------------------
+        feed_dict.update({placeholders['faces'][0]: faces})  # Use faces if needed
+
         out1, out2, out3 = sess.run([model.output1, model.output2, model.output3], feed_dict=feed_dict)
-        # ---------------------------------------------------------------
-        # save GT
-        label_path = os.path.join(predict_dir, data_id.replace('.dat', '_ground.xyz'))
+
+        # Save GT
+        label_path = os.path.join(predict_dir, data_id.replace('.npz', '_ground.xyz'))
         np.savetxt(label_path, labels)
-        # save 1
-        # out1_path = os.path.join(predict_dir, data_id.replace('.dat', '_predict_1.xyz'))
-        # np.savetxt(out1_path, out1)
-        # # save 2
-        # out2_path = os.path.join(predict_dir, data_id.replace('.dat', '_predict_2.xyz'))
-        # np.savetxt(out2_path, out2)
-        # save 3
-        out3_path = os.path.join(predict_dir, data_id.replace('.dat', '_predict.xyz'))
+        # Save prediction
+        out3_path = os.path.join(predict_dir, data_id.replace('.npz', '_predict.xyz'))
         np.savetxt(out3_path, out3)
 
         # Plot prediction as a scatter plot
-        plot_scatter(pt=out3, data_name=data_id, plt_path=predict_dir)
+        # every 143
+        plot_scatter(pt=out3, data_name="pred_"+data_id, plt_path=predict_dir)
+        if labels.shape[1] >= 3:
+            plot_scatter(pt=labels[:, :3], data_name='_label' + data_id, plt_path=predict_dir)
+        else:
+            print("Warning: Labels do not contain XYZ coordinates.")
 
         print('Iteration {}/{}, Data id {}'.format(iters + 1, test_number, data_id))
 
