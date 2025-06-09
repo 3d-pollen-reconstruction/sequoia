@@ -19,7 +19,7 @@ np.random.seed(123)
 
 
 class DataFetcher(threading.Thread):
-    def __init__(self, file_list, data_root, image_root, is_val=False, mesh_root=None):
+    def __init__(self, file_list, data_root, image_root, is_val=False, mesh_root=None, num_input_images=3, view_indices=None):
         super(DataFetcher, self).__init__()
         self.stopped = False
         self.queue = queue.Queue(64)
@@ -38,6 +38,12 @@ class DataFetcher(threading.Thread):
         self.mesh_root = mesh_root
         self.number = len(self.pkl_list)
         np.random.shuffle(self.pkl_list)
+        self.num_input_images = num_input_images
+        if view_indices is None:
+            # Default to [0, 6, 7] for 3 images, or [0, 1, 2, ...] for others
+            self.view_indices = list(range(num_input_images))
+        else:
+            self.view_indices = view_indices
 
     def work(self, idx):
         try:
@@ -77,9 +83,9 @@ class DataFetcher(threading.Thread):
                 mesh = np.loadtxt(mesh_path)
             else:
                 mesh = None
-            imgs = np.zeros((3, 224, 224, 3))
-            poses = np.zeros((3, 5))
-            for idx, view in enumerate([0, 6, 7]):
+            imgs = np.zeros((self.num_input_images, 224, 224, 3))
+            poses = np.zeros((self.num_input_images, 5))
+            for idx, view in enumerate(self.view_indices):
                 img = cv2.imread(os.path.join(img_path, str(view).zfill(2) + '.png'), cv2.IMREAD_UNCHANGED)
                 img[np.where(img[:, :, 3] == 0)] = 255
                 img = cv2.resize(img, (224, 224))

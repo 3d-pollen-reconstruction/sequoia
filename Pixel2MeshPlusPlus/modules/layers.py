@@ -205,7 +205,7 @@ class GraphProjection(Layer):
 
         self.img_feat = placeholders['img_feat']
         self.camera = placeholders['cameras']
-        self.view_number = 2
+        self.view_number = placeholders['num_input_images']
 
     def _call(self, inputs):
         coord = inputs
@@ -370,7 +370,7 @@ class LocalGraphProjection(Layer):
 
         self.img_feat = placeholders['img_feat']
         self.camera = placeholders['cameras']
-        self.view_number = 3
+        self.view_number = placeholders['num_input_images'] # modified EtiiR
 
     def _call(self, inputs):
         coord = inputs

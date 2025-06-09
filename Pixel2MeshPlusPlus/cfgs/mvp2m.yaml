@@ -1,14 +1,16 @@
-lr: 1e-5
-init_epoch: 25
-epochs: 300
-test_epoch: 25
+lr: 1e-4
+init_epoch: 360
+epochs: 360
+test_epoch: 360
 restore: true
+batch_size: 16
 gpu_id: 0
 is_debug: yes
 feat_dim: 2883
 name: 'coarse_mvp2m'
 save_path: 'results'
-
+num_input_images: 3
+view_indices: [0, 6, 7]
 train_file_path: 'data/pollen/train_split.txt'
 train_data_path: 'data/pollen/train/'
 train_image_path: 'data/pollen/train'

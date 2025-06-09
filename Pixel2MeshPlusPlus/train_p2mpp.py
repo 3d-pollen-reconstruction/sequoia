@@ -29,7 +29,9 @@ def main(cfg):
     num_supports = 2
     placeholders = {
         'features': tf.placeholder(tf.float32, shape=(None, 3), name='features'),
-        'img_inp': tf.placeholder(tf.float32, shape=(3, 224, 224, 3), name='img_inp'),
+        #'img_inp': tf.placeholder(tf.float32, shape=(3, 224, 224, 3), name='img_inp'),
+        'img_inp': tf.placeholder(tf.float32, shape=(cfg.num_input_images, 224, 224, 3), name='img_inp'),
+        'view_num': tf.placeholder(tf.int32, shape=(), name='view_num'),
         'labels': tf.placeholder(tf.float32, shape=(None, 6), name='labels'),
         'support1': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
         'support2': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
@@ -41,10 +43,11 @@ def main(cfg):
         'dropout': tf.placeholder_with_default(0., shape=()),
         'num_features_nonzero': tf.placeholder(tf.int32),
         'sample_coord': tf.placeholder(tf.float32, shape=(43, 3), name='sample_coord'),
-        'cameras': tf.placeholder(tf.float32, shape=(3, 5), name='Cameras'),
+        'cameras': tf.placeholder(tf.float32, shape=(cfg.num_input_images, 5), name='Cameras'),
         'faces_triangle': [tf.placeholder(tf.int32, shape=(None, 3)) for _ in range(num_blocks)],
         'sample_adj': [tf.placeholder(tf.float32, shape=(43, 43)) for _ in range(num_supports)],
     }
+    placeholders['num_input_images'] = cfg.num_input_images
 
     root_dir = os.path.join(cfg.save_path, cfg.name)
     model_dir = os.path.join(cfg.save_path, cfg.name, 'models')
@@ -72,7 +75,7 @@ def main(cfg):
     # ---------------------------------------------------------------
     print('=> load data')
     data = DataFetcher(file_list=cfg.train_file_path, data_root=cfg.train_data_path,
-                       image_root=cfg.train_image_path, is_val=False, mesh_root=cfg.train_mesh_root)
+                       image_root=cfg.train_image_path, is_val=False, mesh_root=cfg.train_mesh_root, num_input_images=cfg.num_input_images, view_indices=cfg.view_indices)
     data.setDaemon(True)
     data.start()
     # ---------------------------------------------------------------
@@ -141,6 +144,8 @@ def main(cfg):
             feed_dict.update({placeholders['img_inp']: img_all_view})
             feed_dict.update({placeholders['labels']: labels})
             feed_dict.update({placeholders['cameras']: poses})
+            feed_dict.update({placeholders['view_num']: cfg.num_input_images})
+
             # ---------------------------------------------------------------
             _, dists, summaries, out1l, out2l = sess.run([model.opt_op, model.loss, model.merged_summary_op, model.output1l, model.output2l], feed_dict=feed_dict)
             # ---------------------------------------------------------------
@@ -154,9 +159,9 @@ def main(cfg):
             mean_loss = np.mean(all_loss[np.where(all_loss)])
             print('Epoch {}, Iteration {}, Mean loss = {}, iter loss = {}, {}, data id {}'.format(current_epoch, iters + 1, mean_loss, dists, data.queue.qsize(), data_id))
             train_writer.add_summary(summaries, step)
-            if (iters + 1) % 20 == 0:
+            if (iters + 1) % 143 == 0:
                 plot_scatter(pt=out2l, data_name=data_id, plt_path=epoch_plt_dir)
-                #np.save(os.path.join(epoch_plt_dir, f"{data_id}_pred.xyz"), out2l)
+                np.save(os.path.join(epoch_plt_dir, f"{data_id}_pred1.xyz"), out1l)
                 np.savetxt(os.path.join(epoch_plt_dir, f"{data_id}_pred.xyz"), out2l)
 
 

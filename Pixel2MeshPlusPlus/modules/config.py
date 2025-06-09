@@ -60,6 +60,10 @@ def create_parser():
     parser.add_argument('--load_cnn', type=str2bool, default=False)
     parser.add_argument('--pre_trained_cnn_path', help='pre-trained cnn path')
     parser.add_argument('--cnn_step', type=int, help='cnn pre-trained step')
+    parser.add_argument('--view_indices', nargs='+', type=int, default=None,
+                    help='Indices of input views to be used, e.g. 0 1 for 2 views')
+    parser.add_argument('--num_input_images', type=int, default=3, help='Number of input images')
+
     return parser
 
 

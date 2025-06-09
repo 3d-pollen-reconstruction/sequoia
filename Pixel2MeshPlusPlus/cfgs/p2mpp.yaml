@@ -8,20 +8,23 @@ save_path: 'results'
 # about cnn
 load_cnn: yes
 pre_trained_cnn_path: 'results/coarse_mvp2m/models/'
-cnn_step: 25
+cnn_step: 360
 # train
 lr: 1e-5
-epochs: 10
-init_epoch: 25
+# Custom modification for Pixel2Mesh++ by EtiiR
+num_input_images: 3
+view_indices: [0, 6, 7]
+epochs: 600
+init_epoch: 360
 gpu_id: 0
 restore: false
 train_file_path: 'data/pollen/train_split.txt'
 train_data_path: 'data/pollen/train/'
 train_image_path: 'data/pollen/train'
-train_mesh_root: 'results/coarse_mvp2m/coarse_intermediate/25'
+train_mesh_root: 'results/coarse_mvp2m/coarse_intermediate/360'
 # test
-test_epoch: 25
+test_epoch: 500
 test_file_path: 'data/pollen/train_split.txt'
 test_data_path: 'data/pollen/train/'
 test_image_path: 'data/pollen/train'
-test_mesh_root: 'results/coarse_mvp2m/coarse_intermediate/25'
+test_mesh_root: 'results/coarse_mvp2m/coarse_intermediate/360'
