@@ -7,9 +7,9 @@ from functools import partial
 
 # === CONFIGURATION ===
 blender_path = r"C:\Program Files\Blender2.7\blender.exe"
-script_path = r"C:\Users\super\Documents\GitHub\shapenet_renderer\shapenet_spherical_renderer_multi_core.py"
+script_path = r"C:\Users\super\Documents\Github\sequoia\Shape_Net_Pipeline\shapenet_spherical_renderer_multi_core.py"
 mesh_dir = r"C:\Users\super\Documents\Github\sequoia\data\processed\interim"
-output_dir = r"C:\Users\super\Documents\GitHub\shapenet_renderer\128_views\256_res"
+output_dir = r"C:\Users\super\Documents\GitHub\shapenet_renderer\128_views\test_output"
 num_observations = "128"
 resolution = "256"
 num_processes = 12
@@ -89,7 +89,7 @@ if __name__ == "__main__":
         "test": "orthogonal"
     }
 
-    for split_name in ["train", "val", "test"]:
+    for split_name in ["train","val","test"]:
         print(f"\n===== STARTING SPLIT: {split_name.upper()} =====")
         selected_names = set(splits[split_name])
         mesh_files = [
