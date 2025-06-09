@@ -99,3 +99,5 @@ Pixel2MeshPlusPlus/results/refine_p2mpp/summaries/events.out.tfevents.1749345670
 *.obj
 Pixel2MeshPlusPlus/data/pollen_low_res/*
 Pixel2MeshPlusPlus/results/coarse_mvp2m/*
+/Vanilla_Nerf/data_back
+*.mp4
