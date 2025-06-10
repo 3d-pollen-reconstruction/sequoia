@@ -6,6 +6,7 @@ defaults:
   - trainer: default
   - model: visual_hull
   - experiment: null
+  - callbacks: default
 
 ckpt_path: null
 default_root_dir: checkpoints/

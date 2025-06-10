@@ -1,4 +1,4 @@
-_target_: lightning.pytorch.trainer.Trainer
+_target_: lightning.pytorch.Trainer
 
 min_epochs: 250
 max_epochs: 250

@@ -1,0 +1,5 @@
+_target_: lightning.pytorch.callbacks.EarlyStopping
+monitor: "val/loss"
+mode: "min"
+patience: 10
+check_on_train_epoch_end: false

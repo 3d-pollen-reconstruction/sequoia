@@ -1,0 +1,26 @@
+# @package _global_
+
+name: pix2vox_default
+
+defaults:
+  - override /model: pix2vox
+
+model:
+  pretrained: null
+
+trainer:
+  min_epochs: 100
+  max_epochs: 100
+
+data:
+  image_transforms:
+    _target_: torchvision.transforms.Compose
+    transforms:
+      - _target_: torchvision.transforms.Resize
+        size: [224, 224]
+      - _target_: torchvision.transforms.Grayscale
+        num_output_channels: 3
+      - _target_: torchvision.transforms.ToTensor
+      - _target_: torchvision.transforms.Normalize
+        mean: [0.5, 0.5, 0.5]
+        std:  [0.5, 0.5, 0.5]
