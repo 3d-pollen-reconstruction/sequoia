@@ -163,6 +163,12 @@ def main(cfg):
                 plot_scatter(pt=out2l, data_name=data_id, plt_path=epoch_plt_dir)
                 np.save(os.path.join(epoch_plt_dir, f"{data_id}_pred1.xyz"), out1l)
                 np.savetxt(os.path.join(epoch_plt_dir, f"{data_id}_pred.xyz"), out2l)
+                if labels.shape[1] >= 3:
+                    plot_scatter(
+                        pt=labels[:, :3],
+                        data_name="_label" + data_id,
+                        plt_path=epoch_plt_dir,
+                    )
 
 
         # ---------------------------------------------------------------

@@ -1,2 +1,0 @@
-model_checkpoint_path: "meshnet.ckpt-275"
-all_model_checkpoint_paths: "meshnet.ckpt-275"
