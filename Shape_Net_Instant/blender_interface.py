@@ -6,7 +6,7 @@ from mathutils import Vector
 
 
 class BlenderInterface():
-    def __init__(self, resolution=256, background_color=(1, 1, 1)):
+    def __init__(self, resolution=320, background_color=(1, 1, 1)):
         self.resolution = resolution
 
         bpy.ops.object.delete()  # Delete default cube
@@ -18,6 +18,10 @@ class BlenderInterface():
         self.blender_renderer.resolution_percentage = 100
         self.blender_renderer.image_settings.file_format = 'PNG'
         self.blender_renderer.alpha_mode = 'SKY'
+        self.camera = bpy.context.scene.camera
+        self.camera.data.sensor_height = self.camera.data.sensor_width
+        # InstantMesh often uses FOV around 50 degrees
+        self.camera.data.angle = np.radians(50)  # Set FOV to 50 degrees
 
         # Lighting
         world = bpy.context.scene.world
@@ -190,7 +194,7 @@ class BlenderInterface():
 
             bpy.ops.render.render(write_still=True)
             cam_poses.append(np.array(mat))
-
+            
             if write_cam_params:
                 RT = util.get_world2cam_from_blender_cam(self.camera)
                 cam2world = RT.inverted()

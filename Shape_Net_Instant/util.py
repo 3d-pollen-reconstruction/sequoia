@@ -9,6 +9,18 @@ from functools import reduce
 def normalize(vec):
     return vec / (np.linalg.norm(vec, axis=-1, keepdims=True) + 1e-9)
 
+def get_instantmesh_train_cameras(num_views=32, radius=2.0, elev_min=15, elev_max=60):
+    cameras = []
+    # Evenly spaced in azimuth
+    for i in range(num_views):
+        az = 2 * np.pi * i / num_views
+        # Evenly spaced in elevation
+        elev = np.radians(elev_min + (elev_max - elev_min) * (i / (num_views - 1)))
+        x = radius * np.cos(elev) * np.cos(az)
+        y = radius * np.sin(elev)
+        z = radius * np.cos(elev) * np.sin(az)
+        cameras.append((x, y, z))
+    return np.array(cameras)
 
 # All the following functions follow the opencv convention for camera coordinates.
 def look_at(cam_location, point):
@@ -236,3 +248,62 @@ def get_orthogonal_camera_positions(sphere_radius, center=(0, 0, 0)):
         z = sphere_radius * math.sin(angle) + center[2]
         positions.append((x, y, z))
     return np.array(positions)
+
+def get_uniform_sphere_cameras(num_views, radius=1.5, elevation_range=(0, 30)):
+    """
+    Generate camera positions uniformly distributed on a sphere
+    with controlled elevation for better InstantMesh training.
+    """
+    positions = []
+    for i in range(num_views):
+        # Uniform azimuth
+        azimuth = 2 * math.pi * i / num_views
+        # Random elevation within range
+        elevation = math.radians(random.uniform(*elevation_range))
+        
+        x = radius * math.cos(elevation) * math.cos(azimuth)
+        y = radius * math.sin(elevation)
+        z = radius * math.cos(elevation) * math.sin(azimuth)
+        
+        positions.append((x, y, z))
+    
+    return np.array(positions)
+
+def get_camera_matrices_for_instantmesh(positions, target=(0, 0, 0)):
+    """
+    Convert camera positions to transformation matrices for InstantMesh
+    """
+    matrices = []
+    for pos in positions:
+        cam_matrix = look_at(np.array(pos), np.array(target))
+        blender_matrix = cv_cam2world_to_bcam2world(cam_matrix)
+        matrices.append(blender_matrix)
+    
+    return matrices
+
+def validate_camera_for_instantmesh(camera_data, expected_fov=50):
+    """
+    Validate camera settings match InstantMesh expectations
+    """
+    actual_fov = math.degrees(camera_data.angle)
+    if abs(actual_fov - expected_fov) > 1:
+        print("Warning: FOV is {0}°, InstantMesh expects ~{1}°".format(actual_fov, expected_fov))
+
+    
+    return True
+
+def get_instantmesh_camera_pattern(num_views=6, radius=1.5):
+    """
+    Generate camera positions optimized for InstantMesh training
+    """
+    if num_views == 6:
+        # Use orthogonal + additional views for better coverage
+        base_positions = get_orthogonal_camera_positions(radius)
+        # Add two more views at different elevations
+        extra_positions = [
+            (0, radius * 0.5, radius * 0.866),  # 30° elevation
+            (0, -radius * 0.5, radius * 0.866)  # -30° elevation
+        ]
+        return np.vstack([base_positions, extra_positions])
+    else:
+        return get_uniform_sphere_cameras(num_views, radius)

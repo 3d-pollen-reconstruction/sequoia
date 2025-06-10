@@ -62,7 +62,7 @@ def save_obj(vertices, triangles, path, vert_rgb=None):
     :param triangles (N, 3)
     :param vert_rgb (N, 3) rgb
     """
-    file = open(path, "w")
+    file = open(path, "w", encoding="utf-8")
     if vert_rgb is None:
         # No color
         for v in vertices:

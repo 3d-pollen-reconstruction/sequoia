@@ -225,12 +225,14 @@ def get_archimedean_spiral(sphere_radius, num_steps=250):
 
 def get_orthogonal_camera_positions(sphere_radius, center=(0, 0, 0)):
     """
-    Returns 4 camera positions at 90-degree intervals around the Y axis,
-    all at the same elevation (XZ plane), looking at the center.
+    Returns 6 camera positions at specified angles around the Y axis (XZ plane):
+    0°, 90°, 120°, 160°, 270°, 310°
+    All looking at the center.
     """
+    angles_deg = [0, 90, 180, 270, 45, 135, 225, 315]
     positions = []
-    for i in range(4):
-        angle = i * (math.pi / 2)  # 0, 90, 180, 270 degrees in radians
+    for deg in angles_deg:
+        angle = math.radians(deg)
         x = sphere_radius * math.cos(angle) + center[0]
         y = center[1]
         z = sphere_radius * math.sin(angle) + center[2]

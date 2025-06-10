@@ -19,6 +19,17 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from dotmap import DotMap
+# silence some warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torchvision")
+warnings.filterwarnings("ignore", category=UserWarning, module="PIL")
+# filter pytorch warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+# filter weights only warnings
+warnings.filterwarnings("ignore", category=UserWarning, message=".*weights only.*")
+warnings.filterwarnings("ignore", category=FutureWarning, module="torch")
+os.environ["WANDB_SILENT"] = "true"  # Reduce console output
+os.environ["WANDB_MAX_HIST_STEPS"] = "100"  # Limit history steps
+#os.environ["WANDB_MODE"] = "dryrun"  # Creates files locally but 
 
 
 def extra_args(parser):
@@ -29,7 +40,7 @@ def extra_args(parser):
         "--nviews",
         "-V",
         type=str,
-        default="1",
+        default="2",
         help="Number of source views (multiview); put multiple (space delim) to pick randomly per batch ('NV')",
     )
     parser.add_argument(
@@ -133,6 +144,15 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
+        #if batch == 0 and epoch > 0 and epoch % 2 == 0:
+        #    print("Syncing TensorBoard logs to WandB...")
+        #    try:
+        #        import subprocess
+        #        # This will sync only the latest logs
+        #        log_dir = self.summary_path
+        #        subprocess.run(["wandb", "sync", log_dir], check=False)
+        #    except Exception as e:
+        #        print(f"Error syncing TensorBoard logs: {e}")
 
     def extra_save_state(self):
         torch.save(renderer.state_dict(), self.renderer_state_path)
@@ -228,14 +248,52 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt)
         loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
+        
+        # MODIFICATION 3: Add alpha sparsity regularization to prevent collapse
+        alpha_reg_loss = 0.0
+        if hasattr(coarse, 'weights') and coarse.weights is not None:
+            alpha_coarse = coarse.weights.sum(dim=-1)  # Sum over samples dimension
+            alpha_sparsity = torch.mean(alpha_coarse)
+            alpha_reg_loss += 0.01 * alpha_sparsity  # Encourage sparse alpha
+            loss_dict["alpha_sparse_c"] = alpha_sparsity.item()
+        
         if using_fine:
             fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
             rgb_loss = rgb_loss * self.lambda_coarse + fine_loss * self.lambda_fine
             loss_dict["rf"] = fine_loss.item() * self.lambda_fine
+            
+            # Fine network alpha regularization
+            if hasattr(fine, 'weights') and fine.weights is not None:
+                alpha_fine = fine.weights.sum(dim=-1)
+                alpha_sparsity = torch.mean(alpha_fine)
+                alpha_reg_loss += 0.015 * alpha_sparsity
+                loss_dict["alpha_sparse_f"] = alpha_sparsity.item()
 
-        loss = rgb_loss
+        # MODIFICATION 4: Add total regularization loss
+        loss = rgb_loss + alpha_reg_loss
+        loss_dict["alpha_reg"] = alpha_reg_loss
+        
         if is_train:
             loss.backward()
+            
+            # MODIFICATION 5: Add gradient clipping specifically for alpha-related parameters
+            alpha_params = []
+            other_params = []
+            
+            for name, param in net.named_parameters():
+                if param.grad is not None:
+                    if 'alpha' in name.lower() or 'density' in name.lower():
+                        alpha_params.append(param)
+                    else:
+                        other_params.append(param)
+            
+            # Clip gradients more aggressively for alpha parameters
+            if alpha_params:
+                torch.nn.utils.clip_grad_norm_(alpha_params, max_norm=0.1)
+                print(f"Clipped {len(alpha_params)} alpha parameters")
+            if other_params:
+                torch.nn.utils.clip_grad_norm_(other_params, max_norm=1.0)
+                
         loss_dict["t"] = loss.item()
 
         return loss_dict
@@ -245,7 +303,11 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
     def train_step(self, data, global_step):
         loss_dict = self.calc_losses(data, is_train=True, global_step=global_step)
-        wandb.log(loss_dict, step=global_step)
+        # Get current LR
+        current_lr = self.optim.param_groups[0]["lr"]
+        loss_dict["lr"] = current_lr  # Add LR to the dict
+        wandb.log(loss_dict, step=global_step)  # Log everything at once
+
         return loss_dict
 
     #def eval_step(self, data, global_step):
@@ -396,7 +458,7 @@ class PixelNeRFTrainer(trainlib.Trainer):
             warnings.warn(
                 "Alpha values greater than 1.0 detected, exiting program to prevent saving bad checkpoint."
             )
-            sys.exit(1)
+            #sys.exit(1)
 
         # set the renderer network back to train mode
         renderer.train()

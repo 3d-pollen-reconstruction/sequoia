@@ -1,0 +1,5 @@
+Net refine_p2mpp | Start training | lr =  1e-05
+Epoch 361, loss 468.6341247558594
+Epoch 362, loss 468.6300964355469
+Epoch 363, loss 468.5686340332031
+Epoch 364, loss 468.5897216796875

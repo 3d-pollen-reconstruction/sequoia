@@ -149,13 +149,21 @@ class PollenDataset(Dataset):
                 depth = torch.from_numpy(depth[None, ...])
         
             pose = self.cam_poses[i]
-            pose = np.vstack([pose, [0, 0, 0, 1]])
+            if pose.shape == (3, 4):
+                pose = np.vstack([pose, [0, 0, 0, 1]])
+            elif pose.shape == (4, 4):
+                pass  # OK
+            else:
+                raise ValueError(f"Unexpected pose shape: {pose.shape}")
             return img, alpha, depth, normal_img, pose
         
         images, alphas, depths, normals, poses = zip(*[load_sample(i) for i in idxs])
-        images, alphas, depths, normals = map(lambda x: torch.stack(x), [images, alphas, depths, normals])
-        poses = torch.from_numpy(np.stack(poses)).float()
-        c2ws = torch.linalg.inv(poses)
+        images = torch.stack(images).float()
+        alphas = torch.stack(alphas).float()
+        depths = torch.stack(depths).float()
+        normals = torch.stack(normals).float()
+        poses = torch.from_numpy(np.stack(poses).astype(np.float32)).float()
+        c2ws = torch.linalg.inv(poses).float()
 
         # Normalize normals
         normals = normals * 2.0 - 1.0
@@ -173,7 +181,7 @@ class PollenDataset(Dataset):
             ]).unsqueeze(0).float()
             c2ws = torch.matmul(rot_z, c2ws)
 
-        K = FOV_to_intrinsics(self.fov)
+        K = FOV_to_intrinsics(self.fov).float()
         Ks = K.unsqueeze(0).repeat(self.input_view_num + self.target_view_num, 1, 1)
 
         return {
