@@ -1,13 +1,13 @@
-# configs/callbacks/model_checkpoint.yaml
-_target_: lightning.pytorch.callbacks.ModelCheckpoint
+model_checkpoint:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
 
-# Put checkpoints under ./checkpoints/<cfg.name>/
-dirpath: "checkpoints/${name}"
+  # Put checkpoints under ./checkpoints/<cfg.name>/
+  dirpath: "checkpoints/${name}"
 
-# Use your own name field, then let Lightning fill in checkpoint‐specific fields
-filename: "${name}_epoch{epoch:02d}-val_loss{val_loss:.4f}"
+  # Use your own name field, then let Lightning fill in checkpoint‐specific fields
+  filename: "${name}_epoch{epoch:02d}-val_loss{val_loss:.4f}"
 
-monitor: "val_loss"
-mode: "min"
-save_top_k: 3
-save_last: true
+  monitor: "val_loss"
+  mode: "min"
+  save_top_k: 3
+  save_last: true

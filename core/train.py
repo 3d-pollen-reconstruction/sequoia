@@ -45,7 +45,7 @@ def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
     trainer: pl.Trainer = instantiate(
         cfg.trainer,
         logger=wandb_logger,
-        callbacks=instantiate(cfg.get("callbacks")),
+        callbacks=instantiate_callbacks(cfg.get("callbacks")),
     )
 
     trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
@@ -65,6 +65,23 @@ def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
     wandb_logger.experiment.finish()
 
     return results
+
+
+def instantiate_callbacks(callbacks_cfg: DictConfig):
+    if not callbacks_cfg:
+        logger.warning("No callback configs found! Skipping..")
+        return []
+
+    if not isinstance(callbacks_cfg, DictConfig):
+        raise TypeError("Callbacks config must be a DictConfig!")
+
+    callbacks = []
+    for _, cb_conf in callbacks_cfg.items():
+        if isinstance(cb_conf, DictConfig) and "_target_" in cb_conf:
+            logger.info(f"Instantiating callback <{cb_conf._target_}>")
+            callbacks.append(instantiate(cb_conf))
+
+    return callbacks
 
 
 @hydra.main(config_path=str(CONFIG_ROOT), config_name="train", version_base="1.3")
