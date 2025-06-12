@@ -1,6 +1,6 @@
 # @package _global_
 
-name: pix2vox_default
+name: pix2vox_base_3img
 
 defaults:
   - override /model: pix2vox
