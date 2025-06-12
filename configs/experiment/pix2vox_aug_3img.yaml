@@ -1,6 +1,6 @@
 # @package _global_
 
-name: pix2vox_base
+name: pix2vox_aug_3img
 
 defaults:
   - override /model: pix2vox
@@ -10,6 +10,9 @@ trainer:
   max_epochs: 300
 
 data:
+  n_images: 3
+  batch_size: 24
+  include_augmentations: true
   image_transforms:
     _target_: torchvision.transforms.Compose
     transforms:
