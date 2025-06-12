@@ -6,8 +6,8 @@ defaults:
   - override /model: pix2vox
 
 trainer:
-  min_epochs: 50
-  max_epochs: 100
+  min_epochs: 100
+  max_epochs: 300
 
 data:
   batch_size: 24

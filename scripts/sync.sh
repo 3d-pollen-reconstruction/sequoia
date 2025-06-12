@@ -19,6 +19,7 @@ EXCLUDES=(
   "notebooks/"
   "Pixel_Nerf/"
   "Pixel2Mesh/"
+  ".env"
   ".git/"
   ".venv/"
 )
