@@ -21,7 +21,7 @@ import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 from pytorch3d.implicitron.dataset import types
 from pytorch3d.implicitron.dataset.dataset_base import DatasetBase
-from pytorch3d.implicitron.dataset.json_index_dataset import (
+from .json_index_dataset import (
     FrameAnnotsEntry, _bbox_xywh_to_xyxy, _bbox_xyxy_to_xywh,
     _clamp_box_to_image_bounds_and_round, _crop_around_box, _get_1d_bounds,
     _get_bbox_from_mask, _get_clamp_bbox, _load_1bit_png_mask,
