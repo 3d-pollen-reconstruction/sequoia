@@ -15,7 +15,7 @@ import glob
 MAX_SAMPLES = 207  # Set to None for all files, or an integer for a quick test
 
 # Use absolute path for interim folder
-input_folder = r"C:\Users\super\Documents\Github\shapenet_renderer\augmentation"
+input_folder = r"C:\Users\super\Documents\Github\sequoia\data\processed\augmentation"
 output_root_folder = (
     r"C:\Users\super\Documents\Github\sequoia\data\processed\pixel2mesh_original_augmented"
 )
@@ -48,15 +48,16 @@ def normalize_mesh(mesh):
 
 def get_camera_positions(num_views=8, distance=2.5):
     positions = []
+
     angles = [
+        (0, 30),
+        (90, 30),
+        (180, 30),
+        (270, 30),
         (45, 30),
-        (-45, 30),
         (135, 30),
-        (-135, 30),
-        (45, -30),
-        (-45, -30),
-        (135, -30),
-        (-135, -30),
+        (225, 30),
+        (315, 30),
     ]
     for i in range(num_views):
         azimuth, elevation = angles[i]
@@ -145,7 +146,7 @@ def render_multiview_data(
         mesh_o3d = o3d.geometry.TriangleMesh()
         mesh_o3d.vertices = o3d.utility.Vector3dVector(vertices)
         mesh_o3d.triangles = o3d.utility.Vector3iVector(faces_proc[:, :3])
-        mesh_o3d = mesh_o3d.simplify_quadric_decimation(5000)
+        mesh_o3d = mesh_o3d.simplify_quadric_decimation(20000)
         mesh_o3d = normalize_mesh(mesh_o3d)  # ✅ Use your function here
         mesh_o3d.compute_vertex_normals()
 
@@ -264,7 +265,7 @@ if __name__ == "__main__":
     os.makedirs(category_folder, exist_ok=True)
 
     # Load splits from JSON
-    splits_json_path = r"c:\Users\super\Documents\Github\shapenet_renderer\128_views\pollen_augmented\splits.json"
+    splits_json_path = r"C:\Users\super\Documents\Github\sequoia\data\pollen_augmented\splits.json"
     with open(splits_json_path, "r") as f:
         splits = json.load(f)
 
@@ -320,6 +321,11 @@ if __name__ == "__main__":
                 print(f"❌ Mesh file not found: {mesh_path}")
                 continue
             output_model_dir = os.path.join(split_dir, dir_name)
+            npz_path = os.path.join(split_dir, npz_name)
+            # Skip if output folder or npz file already exists
+            if os.path.exists(output_model_dir) or os.path.exists(npz_path):
+                print(f"⏩ Skipping {split_name}/{pollen_id} (already exists)")
+                continue
             dat_path = os.path.join(split_dir, npz_name.replace(".npz", ".dat"))
             try:
                 print(f"🔄 Processing {split_name}/{pollen_id} ({os.path.basename(mesh_path)})...")
