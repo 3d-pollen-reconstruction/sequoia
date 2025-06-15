@@ -87,6 +87,10 @@ def main(cfg):
     model = MeshNetMVP2M(placeholders, logging=True, args=cfg)
     # ---------------------------------------------------------------
     print("=> load data")
+    print("Train data file path:", cfg.train_file_path)
+    print("Train data root path:", cfg.train_data_path)
+    print("Train image root path:", cfg.train_image_path)
+    print("Number of input images:", cfg.num_input_images)
     data = DataFetcher(
         file_list=cfg.train_file_path,
         data_root=cfg.train_data_path,
@@ -190,7 +194,41 @@ def main(cfg):
                 )
             )
             train_writer.add_summary(summaries, step)
-            if (iters + 1) % 143 == 0:
+            # if cfg.train_data_path contains augmented as path every 5000 iterations plot
+            
+            if "augmented" in cfg.train_data_path:
+                
+                if (iters + 1) % 5000 == 0:
+                    # === DEBUG OUTPUT ===
+                    print("Shape of out3:", out3.shape)
+                    print("X range:", np.min(out3[:, 0]), np.max(out3[:, 0]))
+                    print("Y range:", np.min(out3[:, 1]), np.max(out3[:, 1]))
+                    print("Z range:", np.min(out3[:, 2]), np.max(out3[:, 2]))
+                    print("NaNs in out3:", np.isnan(out3).any())
+                    print("All-zero vertices in out3:", np.all(out3 == 0, axis=1).sum())
+
+                    # Plot model prediction
+                    plot_scatter(
+                        pt=out3, data_name="pred_" + data_id, plt_path=epoch_plt_dir
+                    )
+                    plot_scatter(
+                        initial_verts,
+                        data_name="init_ellipsoid.png",
+                        plt_path=epoch_plt_dir,
+                    )
+
+                    # Plot ground truth label
+                    if labels.shape[1] >= 3:
+                        plot_scatter(
+                            pt=labels[:, :3],
+                            data_name="_label" + data_id,
+                            plt_path=epoch_plt_dir,
+                        )
+                    else:
+                        print("Warning: Labels do not contain XYZ coordinates.")
+                        
+            # else plot every 140 iterations
+            elif (iters + 1) % 140 == 0:
                 # === DEBUG OUTPUT ===
                 print("Shape of out3:", out3.shape)
                 print("X range:", np.min(out3[:, 0]), np.max(out3[:, 0]))
@@ -208,9 +246,7 @@ def main(cfg):
                     data_name="init_ellipsoid.png",
                     plt_path=epoch_plt_dir,
                 )
-                # diff = np.linalg.norm(out3 - initial_verts, axis=1)
-                # print("Initial difference from ellipsoid → mean: {:.6f}, min: {:.6f}, max: {:.6f}".format(
-                #     diff.mean(), diff.min(), diff.max()))
+
 
                 # Plot ground truth label
                 if labels.shape[1] >= 3:
