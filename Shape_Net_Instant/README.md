@@ -1,0 +1,1 @@
+ "C:\Program Files\Blender2.7\blender.exe" --background --python .\shapenet_spherical_renderer.py -- --mesh_dir "C:/Users/super/Documents/Github/sequoia/data/processed/interim/" --output_dir "C:/Users/super/Documents/Github/sequoia/data/processed/instant"
