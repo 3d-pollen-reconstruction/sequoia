@@ -1,0 +1,18 @@
+
+# @package _global_
+data:
+  znear: 0.1
+  zfar: 4.0
+  fov: 51.98948897809546
+  category: pollen
+  white_background: true
+  training_resolution: 128
+  origin_distances: false
+
+model:
+  opacity_scale: 0.001
+  opacity_bias: -3.0
+  scale_scale: 0.001
+  scale_bias: 0.02
+  xyz_scale: 0.000001
+  xyz_bias: 0.0
