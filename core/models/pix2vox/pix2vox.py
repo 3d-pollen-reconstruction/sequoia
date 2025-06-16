@@ -28,6 +28,7 @@ class Pix2Vox(MetricsMixin, pl.LightningModule):
         pretrained: str | None = None,
         merger_kickin: int = 50,
         refiner_kickin: int = 100,
+        refiner_dropout: float = 0.3,
     ):
         super().__init__()
         MetricsMixin.__init__(self)
@@ -39,7 +40,7 @@ class Pix2Vox(MetricsMixin, pl.LightningModule):
         self.encoder  = Encoder(cfg)
         self.decoder  = Decoder(cfg)
         self.merger   = Merger(cfg)
-        self.refiner  = Refiner(cfg)
+        self.refiner  = Refiner(cfg, refiner_dropout=refiner_dropout)
 
         self.criterion = nn.BCELoss()
 

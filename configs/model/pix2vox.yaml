@@ -3,3 +3,4 @@ lr: 1e-4
 pretrained: ./pretrained/Pix2Vox-A-ShapeNet.pth
 merger_kickin: 25
 refiner_kickin: 50
+refiner_dropout: 0.3
