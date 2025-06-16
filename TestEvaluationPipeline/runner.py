@@ -188,17 +188,49 @@ class MeshEvaluator:
         return results
 
 
+    #def get_gt_path(self, pred_path, use_augmented=False):
+    #    basename = os.path.basename(pred_path)
+    #    obj_name = os.path.splitext(basename)[0]
+    #    gt_dir = self.gt_root_aug if use_augmented else self.gt_root
+    #    return os.path.join(gt_dir, f"{obj_name}.stl")
+    
     def get_gt_path(self, pred_path, use_augmented=False):
         basename = os.path.basename(pred_path)
         obj_name = os.path.splitext(basename)[0]
+
+        # 🔧 Strip _predict if it exists
+        if obj_name.endswith("_predict"):
+            obj_name = obj_name[:-8]
+
         gt_dir = self.gt_root_aug if use_augmented else self.gt_root
-        return os.path.join(gt_dir, f"{obj_name}.stl")
+
+        stl_path = os.path.join(gt_dir, f"{obj_name}.stl")
+        obj_path = os.path.join(gt_dir, f"{obj_name}.obj")
+        ## if path ends with _00 remove this part
+        if obj_name.endswith("_00"):
+            obj_name = obj_name[:-3]
+            stl_path = os.path.join(gt_dir, f"{obj_name}.stl")
+            obj_path = os.path.join(gt_dir, f"{obj_name}.obj")
+            
+        # if path starts with "pollen_" remove this part
+        if obj_name.startswith("pollen_"):
+            obj_name = obj_name[7:]
+            stl_path = os.path.join(gt_dir, f"{obj_name}.stl")
+            obj_path = os.path.join(gt_dir, f"{obj_name}.obj")
+        #print(f"Looking for GT mesh: {stl_path} or {obj_path}")
+        if os.path.exists(stl_path):
+            return stl_path
+        elif os.path.exists(obj_path):
+            return obj_path
+        else:
+            return obj_path  # fallback path for logging
+
 
     def collect_mesh_files(self, model_dir):
         return [
             os.path.join(root, f)
             for root, _, files in os.walk(model_dir)
-            for f in files if f.endswith(".stl")
+            for f in files if f.endswith((".stl", ".obj"))
         ]
 
     def plot_meshes(self, mesh_pred, mesh_gt, model_name, fname):
