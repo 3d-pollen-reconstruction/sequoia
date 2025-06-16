@@ -48,14 +48,14 @@ def normalize_mesh(mesh):
 def get_camera_positions(num_views=8, distance=2.5):
     positions = []
     angles = [
+        (0, 30),
+        (90, 30),
+        (180, 30),
+        (270, 30),
         (45, 30),
-        (-45, 30),
         (135, 30),
-        (-135, 30),
-        (45, -30),
-        (-45, -30),
-        (135, -30),
-        (-135, -30),
+        (225, 30),
+        (315, 30),
     ]
     for i in range(num_views):
         azimuth, elevation = angles[i]
@@ -144,7 +144,7 @@ def render_multiview_data(
         mesh_o3d = o3d.geometry.TriangleMesh()
         mesh_o3d.vertices = o3d.utility.Vector3dVector(vertices)
         mesh_o3d.triangles = o3d.utility.Vector3iVector(faces_proc[:, :3])
-        mesh_o3d = mesh_o3d.simplify_quadric_decimation(5000)
+        mesh_o3d = mesh_o3d.simplify_quadric_decimation(20000)
         mesh_o3d = normalize_mesh(mesh_o3d)  # ✅ Use your function here
         mesh_o3d.compute_vertex_normals()
 

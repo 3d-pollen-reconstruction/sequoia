@@ -101,5 +101,8 @@ Pixel2MeshPlusPlus/results/refine_p2mpp/summaries/events.out.tfevents.1749345670
 *.obj
 Pixel2MeshPlusPlus/data/pollen_low_res/*
 Pixel2MeshPlusPlus/results/coarse_mvp2m/*
+Pixel2MeshPlusPlus/results/refine_p2mpp_3_inputs/*
 /Vanilla_Nerf/data_back
 *.mp4
+Pixel2MeshPlusPlus/data/pollen_augmented/*
+Pixel2MeshPlusPlus/results/refine_p2mpp_2_inputs/*
