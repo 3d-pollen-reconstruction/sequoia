@@ -18,9 +18,6 @@ logger = logging.getLogger(__name__)
 class Pix2Vox(MetricsMixin, pl.LightningModule):
     """Lightning wrapper for the Pix2Vox model (supports an arbitrary
     number of input views)."""
-
-    # ─────────────────── initialisation ────────────────────────────────── #
-
     def __init__(
         self,
         cfg: Dict[str, Any] | None = None,

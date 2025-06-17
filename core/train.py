@@ -29,7 +29,28 @@ def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
     datamodule = instantiate(cfg.data)
     datamodule.setup("fit")
 
-    model = instantiate(cfg.model)
+    model: torch.nn.Module = instantiate(cfg.model)
+
+    if cfg.model.get("pretrained"):
+        ckpt_path = cfg.model.pretrained
+        state = torch.load(ckpt_path, map_location="cpu")
+        
+        model.load_state_dict(state, strict=False)
+        logger.info(f"Loaded pretrained weights from {ckpt_path}")
+
+    frozen = cfg.model.get("frozen", None)
+    if frozen:
+        if not isinstance(frozen, (list, tuple)):
+            raise ValueError(f"cfg.model.frozen must be a list, got {type(frozen)}")
+        for submod_name in frozen:
+            submod = getattr(model, submod_name, None)
+            if submod is None:
+                logger.warning(f"Cannot freeze '{submod_name}': not found on model")
+                continue
+            for p in submod.parameters():
+                p.requires_grad = False
+            logger.info(f"Froze parameters in model.{submod_name}")
+    
     init_metrics("train", model)
     init_metrics("val", model)
     init_metrics("test", model)
