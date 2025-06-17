@@ -84,18 +84,22 @@ class MeshUtils:
         """
         Voxelizes both meshes and computes IoU.
         """
-        try:
-            vox_pred = mesh_pred.voxelized(pitch)
-            vox_gt = mesh_gt.voxelized(pitch)
-            filled_pred = set(map(tuple, vox_pred.points))
-            filled_gt = set(map(tuple, vox_gt.points))
-            intersection = len(filled_pred & filled_gt)
-            union = len(filled_pred | filled_gt)
-            if union == 0:
-                return np.nan
-            return intersection / union
-        except Exception:
-            return np.nan
+        vox_pred = mesh_pred.voxelized(pitch).fill()
+        vox_gt   = mesh_gt.  voxelized(pitch).fill()
+
+        # 2) extract voxel-center coordinates as sets of tuples
+        pts_pred = set(map(tuple, vox_pred.points))
+        pts_gt   = set(map(tuple, vox_gt.points))
+
+        # 3) compute intersection and union sizes
+        inter = len(pts_pred & pts_gt)
+        union = len(pts_pred | pts_gt)
+        
+        # 4) avoid division by zero
+        if union == 0:
+            return 0.0
+
+        return inter / union
 
     @staticmethod
     def euler_characteristic(mesh):
@@ -113,7 +117,7 @@ class MeshUtils:
 
 
     @staticmethod
-    def align_icp(mesh_source, mesh_target, n_points=5000, max_iterations=100, threshold=0.05):
+    def align_icp(mesh_source, mesh_target, n_points=5000, max_iterations=10000, threshold=0.05):
         """
         Align mesh_source to mesh_target using Open3D ICP (point-to-plane).
         Returns:
