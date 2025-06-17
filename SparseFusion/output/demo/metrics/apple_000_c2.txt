@@ -1,6 +1,0 @@
-warning: this metric is used for debugging only and not the final metricpsnr:
-23.723867013622858
-ssim:
-0.7924113
-pip:
-0.24723339965566993
