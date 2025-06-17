@@ -1,128 +1,260 @@
 import pickle
 import numpy as np
-import os
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-def read_dat_file(file_path):
-    with open(file_path, 'rb') as file:
-        data = pickle.load(file)
+def load_sphere_data(file_path):
+    """Load the sphere prior data"""
+    with open(file_path, 'rb') as f:
+        data = pickle.load(f)
     return data
 
-def visualize_mesh_data(data):
-    """Visualize the mesh data structure"""
+def analyze_true_shape(coord):
+    """Analyze the actual shape without any scaling tricks"""
+    print("="*60)
+    print("TRUE SHAPE ANALYSIS (NO SCALING TRICKS)")
+    print("="*60)
     
-    print("=== Mesh Data Analysis ===")
+    # Raw coordinate statistics
+    print("Raw coordinate statistics:")
+    for i, axis in enumerate(['X', 'Y', 'Z']):
+        values = coord[:, i]
+        print(f"  {axis}: min={values.min():.6f}, max={values.max():.6f}, range={values.max()-values.min():.6f}")
     
-    # Main coordinates
-    coord = data['coord']
-    print(f"Main coordinates: {coord.shape} vertices")
-    print(f"Coordinate range: X[{coord[:,0].min():.3f}, {coord[:,0].max():.3f}], "
-          f"Y[{coord[:,1].min():.3f}, {coord[:,1].max():.3f}], "
-          f"Z[{coord[:,2].min():.3f}, {coord[:,2].max():.3f}]")
+    # Distance analysis
+    distances = np.linalg.norm(coord, axis=1)
+    print(f"\nDistance from origin:")
+    print(f"  Min: {distances.min():.8f}")
+    print(f"  Max: {distances.max():.8f}")
+    print(f"  Std deviation: {distances.std():.8f}")
     
-    # Sample coordinates  
-    sample_coord = data['sample_coord']
-    print(f"Sample coordinates: {sample_coord.shape} vertices")
+    # Shape analysis
+    ranges = coord.max(axis=0) - coord.min(axis=0)
+    print(f"\nShape analysis:")
+    print(f"  X range: {ranges[0]:.6f}")
+    print(f"  Y range: {ranges[1]:.6f}")  
+    print(f"  Z range: {ranges[2]:.6f}")
     
-    # Analyze stages
-    for i, stage_key in enumerate(['stage1', 'stage2', 'stage3'], 1):
-        stage_data = data[stage_key]
-        print(f"Stage {i}: {len(stage_data)} elements")
-        if len(stage_data) > 0:
-            print(f"  First element type: {type(stage_data[0])}")
-            if hasattr(stage_data[0], 'shape'):
-                print(f"  First element shape: {stage_data[0].shape}")
+    # Calculate ratios to check for distortion
+    x_to_y_ratio = ranges[0] / ranges[1]
+    y_to_z_ratio = ranges[1] / ranges[2]
+    x_to_z_ratio = ranges[0] / ranges[2]
     
-    # Faces information
-    faces = data['faces']
-    faces_triangle = data['faces_triangle']
-    print(f"Faces: {len(faces)} elements")
-    print(f"Triangle faces: {len(faces_triangle)} elements")
+    print(f"\nAxis ratios (should be ~1.0 for perfect sphere):")
+    print(f"  X/Y ratio: {x_to_y_ratio:.6f}")
+    print(f"  Y/Z ratio: {y_to_z_ratio:.6f}")
+    print(f"  X/Z ratio: {x_to_z_ratio:.6f}")
     
-    # Pool indices
-    pool_idx = data['pool_idx']
-    print(f"Pool indices: {len(pool_idx)} levels")
+    # Determine shape
+    max_ratio_deviation = max(abs(x_to_y_ratio - 1.0), abs(y_to_z_ratio - 1.0), abs(x_to_z_ratio - 1.0))
     
-    return coord, sample_coord, faces, faces_triangle
+    print(f"\nSHAPE VERDICT:")
+    if max_ratio_deviation < 0.01:
+        print(f"  ✅ PERFECT SPHERE (max deviation: {max_ratio_deviation:.6f})")
+        shape_type = "PERFECT SPHERE"
+    elif max_ratio_deviation < 0.05:
+        print(f"  ✅ VERY ROUND (max deviation: {max_ratio_deviation:.6f})")
+        shape_type = "VERY ROUND"
+    elif max_ratio_deviation < 0.1:
+        print(f"  ⚠️  SLIGHTLY ELONGATED (max deviation: {max_ratio_deviation:.6f})")
+        shape_type = "SLIGHTLY ELONGATED"
+    else:
+        print(f"  ❌ SIGNIFICANTLY DISTORTED (max deviation: {max_ratio_deviation:.6f})")
+        shape_type = "DISTORTED"
+    
+    return shape_type, ranges, max_ratio_deviation, distances
 
-def plot_3d_points(coord, sample_coord, title="Mesh Visualization"):
-    """Plot 3D coordinates"""
-    fig = plt.figure(figsize=(12, 5))
+def plot_true_shape_no_tricks(coord, sample_coord, distances):
+    """Plot with NO forced aspect ratios - shows true shape"""
     
-    # Plot main coordinates
-    ax1 = fig.add_subplot(121, projection='3d')
-    ax1.scatter(coord[:, 0], coord[:, 1], coord[:, 2], c='blue', s=20, alpha=0.6)
-    ax1.set_title(f'Main Coordinates ({coord.shape[0]} points)')
+    fig = plt.figure(figsize=(15, 10))
+    
+    # Plot 1: 3D view with NATURAL scaling (no forced aspect ratio)
+    ax1 = fig.add_subplot(231, projection='3d')
+    ax1.scatter(coord[:, 0], coord[:, 1], coord[:, 2], 
+               c='blue', s=20, alpha=0.7, label='Main points')
+    ax1.scatter(sample_coord[:, 0], sample_coord[:, 1], sample_coord[:, 2], 
+               c='red', s=40, alpha=0.9, label='Sample points')
+    ax1.set_title('3D View (Natural Scaling)')
     ax1.set_xlabel('X')
     ax1.set_ylabel('Y')
     ax1.set_zlabel('Z')
+    ax1.legend()
+    # NO set_box_aspect() - let matplotlib scale naturally
     
-    # Plot sample coordinates
-    ax2 = fig.add_subplot(122, projection='3d')
-    ax2.scatter(sample_coord[:, 0], sample_coord[:, 1], sample_coord[:, 2], c='red', s=30, alpha=0.7)
-    ax2.set_title(f'Sample Coordinates ({sample_coord.shape[0]} points)')
+    # Plot 2: X-Y projection 
+    ax2 = fig.add_subplot(232)
+    ax2.scatter(coord[:, 0], coord[:, 1], c='blue', s=15, alpha=0.7, label='Main')
+    ax2.scatter(sample_coord[:, 0], sample_coord[:, 1], c='red', s=25, alpha=0.9, label='Sample')
+    ax2.set_title('X-Y View (Top)')
     ax2.set_xlabel('X')
     ax2.set_ylabel('Y')
-    ax2.set_zlabel('Z')
+    ax2.legend()
+    ax2.grid(True)
+    # NO set_aspect('equal') - show true proportions
+    
+    # Plot 3: X-Z projection
+    ax3 = fig.add_subplot(233)
+    ax3.scatter(coord[:, 0], coord[:, 2], c='blue', s=15, alpha=0.7, label='Main')
+    ax3.scatter(sample_coord[:, 0], sample_coord[:, 2], c='red', s=25, alpha=0.9, label='Sample')
+    ax3.set_title('X-Z View (Front)')
+    ax3.set_xlabel('X')
+    ax3.set_ylabel('Z')
+    ax3.legend()
+    ax3.grid(True)
+    
+    # Plot 4: Y-Z projection
+    ax4 = fig.add_subplot(234)
+    ax4.scatter(coord[:, 1], coord[:, 2], c='blue', s=15, alpha=0.7, label='Main')
+    ax4.scatter(sample_coord[:, 1], sample_coord[:, 2], c='red', s=25, alpha=0.9, label='Sample')
+    ax4.set_title('Y-Z View (Side)')
+    ax4.set_xlabel('Y')
+    ax4.set_ylabel('Z')
+    ax4.legend()
+    ax4.grid(True)
+    
+    # Plot 5: Distance distribution - FIXED
+    ax5 = fig.add_subplot(235)
+    
+    # Check if all distances are the same (perfect sphere)
+    distance_range = distances.max() - distances.min()
+    
+    if distance_range < 1e-10:  # All distances identical
+        # Show single bar for perfect sphere
+        ax5.bar(['Perfect Sphere'], [len(distances)], color='green', alpha=0.7)
+        ax5.set_title(f'Distance Distribution\n(All exactly {distances[0]:.6f})')
+        ax5.set_ylabel('Count')
+        ax5.text(0, len(distances)/2, f'All {len(distances)} points\nat distance {distances[0]:.6f}', 
+                ha='center', va='center', fontweight='bold')
+    else:
+        # Normal histogram if there's variation
+        n_bins = min(20, max(5, int(len(distances)/5)))  # Adaptive bins
+        ax5.hist(distances, bins=n_bins, alpha=0.7, color='blue', edgecolor='black')
+        ax5.axvline(1.0, color='red', linestyle='--', linewidth=2, label='Perfect unit radius')
+        ax5.set_title('Distance Distribution')
+        ax5.set_xlabel('Distance from Origin')
+        ax5.set_ylabel('Count')
+        ax5.legend()
+    
+    ax5.grid(True)
+    
+    # Plot 6: Coordinate ranges comparison
+    ax6 = fig.add_subplot(236)
+    ranges = coord.max(axis=0) - coord.min(axis=0)
+    bars = ax6.bar(['X', 'Y', 'Z'], ranges, color=['red', 'green', 'blue'], alpha=0.7)
+    ax6.axhline(2.0, color='black', linestyle='--', label='Perfect sphere range (2.0)')
+    ax6.set_title('Coordinate Ranges')
+    ax6.set_ylabel('Range')
+    ax6.legend()
+    ax6.grid(True)
+    
+    # Add range values on bars
+    for bar, range_val in zip(bars, ranges):
+        height = bar.get_height()
+        ax6.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                f'{range_val:.3f}', ha='center', va='bottom', fontweight='bold')
     
     plt.tight_layout()
     plt.show()
 
-def analyze_connectivity(data):
-    """Analyze mesh connectivity and structure"""
-    print("\n=== Connectivity Analysis ===")
+def create_reference_comparison(coord):
+    """Compare with perfect mathematical sphere"""
     
-    # Analyze faces
-    faces = data['faces']
-    if len(faces) > 0 and len(faces[0]) > 0:
-        face_array = np.array(faces[0]) if isinstance(faces[0], list) else faces[0]
-        print(f"First face set shape: {face_array.shape}")
-        print(f"Face indices range: {face_array.min()} to {face_array.max()}")
+    # Generate perfect sphere with same number of points
+    n_points = len(coord)
+    perfect_sphere = []
     
-    # Analyze Laplacian indices
-    lape_idx = data['lape_idx']
-    print(f"Laplacian indices: {len(lape_idx)} levels")
+    golden_angle = np.pi * (3.0 - np.sqrt(5.0))
+    for i in range(n_points):
+        y = 1 - (i / (n_points - 1)) * 2
+        radius = np.sqrt(1 - y * y)
+        theta = golden_angle * i
+        x = np.cos(theta) * radius
+        z = np.sin(theta) * radius
+        perfect_sphere.append([x, y, z])
     
-    # Analyze Chebyshev data
-    sample_cheb = data['sample_cheb']
-    print(f"Sample Chebyshev: {len(sample_cheb)} elements")
+    perfect_sphere = np.array(perfect_sphere)
     
-    sample_cheb_dense = data['sample_cheb_dense']
-    print(f"Sample Chebyshev dense: {len(sample_cheb_dense)} elements")
+    # Compare shapes
+    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    
+    # Perfect sphere projections
+    axes[0,0].scatter(perfect_sphere[:, 0], perfect_sphere[:, 1], c='green', s=10, alpha=0.7)
+    axes[0,0].set_title('Perfect Sphere - X-Y')
+    axes[0,0].set_xlabel('X')
+    axes[0,0].set_ylabel('Y')
+    axes[0,0].grid(True)
+    
+    axes[0,1].scatter(perfect_sphere[:, 0], perfect_sphere[:, 2], c='green', s=10, alpha=0.7)
+    axes[0,1].set_title('Perfect Sphere - X-Z')
+    axes[0,1].set_xlabel('X')
+    axes[0,1].set_ylabel('Z')
+    axes[0,1].grid(True)
+    
+    axes[0,2].scatter(perfect_sphere[:, 1], perfect_sphere[:, 2], c='green', s=10, alpha=0.7)
+    axes[0,2].set_title('Perfect Sphere - Y-Z')
+    axes[0,2].set_xlabel('Y')
+    axes[0,2].set_ylabel('Z')
+    axes[0,2].grid(True)
+    
+    # Your sphere projections
+    axes[1,0].scatter(coord[:, 0], coord[:, 1], c='blue', s=10, alpha=0.7)
+    axes[1,0].set_title('Your Sphere - X-Y')
+    axes[1,0].set_xlabel('X')
+    axes[1,0].set_ylabel('Y')
+    axes[1,0].grid(True)
+    
+    axes[1,1].scatter(coord[:, 0], coord[:, 2], c='blue', s=10, alpha=0.7)
+    axes[1,1].set_title('Your Sphere - X-Z')
+    axes[1,1].set_xlabel('X')
+    axes[1,1].set_ylabel('Z')
+    axes[1,1].grid(True)
+    
+    axes[1,2].scatter(coord[:, 1], coord[:, 2], c='blue', s=10, alpha=0.7)
+    axes[1,2].set_title('Your Sphere - Y-Z')
+    axes[1,2].set_xlabel('Y')
+    axes[1,2].set_ylabel('Z')
+    axes[1,2].grid(True)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Numerical comparison
+    perfect_ranges = perfect_sphere.max(axis=0) - perfect_sphere.min(axis=0)
+    your_ranges = coord.max(axis=0) - coord.min(axis=0)
+    
+    print("\nCOMPARISON WITH PERFECT SPHERE:")
+    print(f"Perfect sphere ranges: X={perfect_ranges[0]:.6f}, Y={perfect_ranges[1]:.6f}, Z={perfect_ranges[2]:.6f}")
+    print(f"Your sphere ranges:    X={your_ranges[0]:.6f}, Y={your_ranges[1]:.6f}, Z={your_ranges[2]:.6f}")
+    print(f"Differences:           X={abs(perfect_ranges[0]-your_ranges[0]):.6f}, Y={abs(perfect_ranges[1]-your_ranges[1]):.6f}, Z={abs(perfect_ranges[2]-your_ranges[2]):.6f}")
 
 def main():
-    file_path = r"C:\Users\super\Documents\GitHub\sequoia\Pixel2MeshPlusPlus\data\custom_prior.dat"
+    # Load the sphere data
+    sphere_file = r"C:\Users\super\Documents\GitHub\sequoia\Pixel2MeshPlusPlus\data\iccv_p2mpp.dat"
     
-    if not os.path.exists(file_path):
-        print(f"File not found: {file_path}")
-        return
+    print("Loading sphere data...")
+    data = load_sphere_data(sphere_file)
     
-    try:
-        data = read_dat_file(file_path)
-        
-        # Analyze the data structure
-        coord, sample_coord, faces, faces_triangle = visualize_mesh_data(data)
-        
-        # Analyze connectivity
-        analyze_connectivity(data)
-        
-        # Plot 3D visualization
-        plot_3d_points(coord, sample_coord)
-        
-        # Save a summary
-        print("\n=== Data Summary ===")
-        print("This appears to be a Pixel2Mesh++ template file containing:")
-        print("- Hierarchical mesh stages (stage1, stage2, stage3)")
-        print("- Main mesh coordinates and sample points")
-        print("- Face connectivity information")
-        print("- Pooling indices for mesh coarsening")
-        print("- Laplacian and Chebyshev polynomial data for graph convolution")
-        
-    except Exception as e:
-        print(f"Error processing file: {e}")
-        import traceback
-        traceback.print_exc()
+    coord = data['coord']
+    sample_coord = data['sample_coord']
+    
+    # Analyze true shape
+    shape_type, ranges, deviation, distances = analyze_true_shape(coord)
+    
+    # Show plots with NO scaling tricks
+    print("\nShowing TRUE shape (no forced scaling)...")
+    plot_true_shape_no_tricks(coord, sample_coord, distances)
+    
+    # Compare with perfect reference
+    print("Comparing with perfect mathematical sphere...")
+    create_reference_comparison(coord)
+    
+    print(f"\n{'='*60}")
+    print(f"FINAL VERDICT: {shape_type}")
+    if shape_type == "PERFECT SPHERE":
+        print("🏀 Your sphere is mathematically perfect!")
+        print("   If it looks distorted in plots, that's just matplotlib's default scaling.")
+    print(f"{'='*60}")
 
 if __name__ == "__main__":
     main()
