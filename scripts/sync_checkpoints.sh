@@ -13,3 +13,4 @@ scp -r "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}" "${LOCAL_DESTINATION}"
 
 
 # scp -r n.fahrni@slurmlogin.cs.technik.fhnw.ch:/home2/n.fahrni/sequoia/checkpoints ./sequoia
+# rsync -avz --progress n.fahrni@slurmlogin.cs.technik.fhnw.ch:/home2/n.fahrni/sequoia/checkpoints/ ./sequoia/checkpoints/
