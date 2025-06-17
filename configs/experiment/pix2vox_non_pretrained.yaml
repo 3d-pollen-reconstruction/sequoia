@@ -10,7 +10,7 @@ model:
 
 trainer:
   min_epochs: 100
-  max_epochs: 100
+  max_epochs: 300
 
 data:
   include_augmentations: true
