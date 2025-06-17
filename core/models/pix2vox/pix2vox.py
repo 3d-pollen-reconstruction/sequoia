@@ -138,10 +138,11 @@ class Pix2Vox(MetricsMixin, pl.LightningModule):
     # ─────────────────── optimiser ─────────────────────────────────────── #
 
     def configure_optimizers(self):
-        params = (
-            list(self.encoder.parameters())
-            + list(self.decoder.parameters())
-            + list(self.merger.parameters())
-            + list(self.refiner.parameters())
-        )
-        return torch.optim.Adam(params, lr=self.lr, betas=(0.9, 0.999))
+        # gather all params that still want gradients
+        trainable_params = [p for p in self.parameters() if p.requires_grad]
+        if len(trainable_params) == 0:
+            raise RuntimeError(
+                "No trainable parameters found in the model! "
+                f"Did you freeze too much? cfg.model.frozen = {self.hparams.get('frozen', None)}"
+            )
+        return torch.optim.Adam(trainable_params, lr=self.lr, betas=(0.9, 0.999))

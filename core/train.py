@@ -26,35 +26,39 @@ def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
     if cfg.get("seed"):
         pl.seed_everything(cfg.seed, workers=True)
 
+    # prepare data
     datamodule = instantiate(cfg.data)
     datamodule.setup("fit")
 
-    model: torch.nn.Module = instantiate(cfg.model)
+    # instantiate model without the `frozen` key
+    tmp_model_cfg = OmegaConf.create(OmegaConf.to_container(cfg.model, resolve=True))
+    tmp_model_cfg.pop("frozen", None)
+    model: torch.nn.Module = instantiate(tmp_model_cfg)
 
+    # load pretrained weights if specified
     if cfg.model.get("pretrained"):
         ckpt_path = cfg.model.pretrained
-        state = torch.load(ckpt_path, map_location="cpu")
-        
+        # force full unpickling of the file (not just weights_only)
+        state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
         model.load_state_dict(state, strict=False)
         logger.info(f"Loaded pretrained weights from {ckpt_path}")
 
-    frozen = cfg.model.get("frozen", None)
-    if frozen:
-        if not isinstance(frozen, (list, tuple)):
-            raise ValueError(f"cfg.model.frozen must be a list, got {type(frozen)}")
-        for submod_name in frozen:
-            submod = getattr(model, submod_name, None)
-            if submod is None:
-                logger.warning(f"Cannot freeze '{submod_name}': not found on model")
-                continue
-            for p in submod.parameters():
-                p.requires_grad = False
-            logger.info(f"Froze parameters in model.{submod_name}")
-    
+    # freeze any requested submodules
+    for submod_name in cfg.model.get("frozen", []):
+        submod = getattr(model, submod_name, None)
+        if submod is None:
+            logger.warning(f"Cannot freeze '{submod_name}': not found on model")
+            continue
+        for p in submod.parameters():
+            p.requires_grad = False
+        logger.info(f"Froze parameters in model.{submod_name}")
+
+    # initialize metrics
     init_metrics("train", model)
     init_metrics("val", model)
     init_metrics("test", model)
 
+    # configure WandB
     flat_cfg = OmegaConf.to_container(cfg, resolve=True)
     wandb_logger = WandbLogger(
         project="reconstruction",
@@ -63,26 +67,31 @@ def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
         reinit=False,
     )
 
+    # instantiate trainer
     trainer: pl.Trainer = instantiate(
         cfg.trainer,
         logger=wandb_logger,
         callbacks=instantiate_callbacks(cfg.get("callbacks")),
     )
 
+    # training
     trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
     val_metrics = trainer.callback_metrics
 
+    # testing
     datamodule.setup("test")
     test_metrics = trainer.test(model, datamodule=datamodule)[0]
 
+    # collect results
     results = {**val_metrics, **{f"test/{k}": v for k, v in test_metrics.items()}}
 
+    # cleanup
     torch.cuda.empty_cache()
     gc.collect()
 
+    # log final metrics to WandB and finish
     for key, val in results.items():
         wandb_logger.experiment.summary[key] = val
-
     wandb_logger.experiment.finish()
 
     return results

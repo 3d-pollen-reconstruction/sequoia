@@ -1,9 +1,17 @@
 # @package _global_
 
-name: pix2vox_aug
+name: pix2vox_aug_frozen_encdec
 
 defaults:
   - override /model: pix2vox
+  - _self_
+
+model:
+  merger_kickin: 0
+  refiner_kickin: 0
+  frozen:
+    - encoder
+    - decoder
 
 trainer:
   min_epochs: 100
@@ -11,7 +19,7 @@ trainer:
 
 data:
   batch_size: 24
-  include_augmentations: true
+  include_augmentations: false
   image_transforms:
     _target_: torchvision.transforms.Compose
     transforms:
@@ -23,14 +31,3 @@ data:
       - _target_: torchvision.transforms.Normalize
         mean: [0.485, 0.456, 0.406]
         std:  [0.229, 0.224, 0.225]
-
-model:
-  _target_: core.models.pix2vox.Pix2Vox
-  lr: 1e-4
-  pretrained: ./pretrained/Pix2Vox-A-ShapeNet.pth
-  merger_kickin: 25
-  refiner_kickin: 50
-  refiner_dropout: 0.0
-  frozen:
-    - encoder
-    - decoder
