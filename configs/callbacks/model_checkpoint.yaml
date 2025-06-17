@@ -5,7 +5,7 @@ model_checkpoint:
   dirpath: "checkpoints/${name}"
 
   # Use your own name field, then let Lightning fill in checkpoint‐specific fields
-  filename: "${name}_epoch{epoch:02d}-val_loss{val/loss:.4f}"
+  filename: "${name}_epoch{epoch:02d}"
 
   monitor: "val/loss"
   mode: "min"

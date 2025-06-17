@@ -106,3 +106,4 @@ Pixel2MeshPlusPlus/results/refine_p2mpp_3_inputs/*
 *.mp4
 Pixel2MeshPlusPlus/data/pollen_augmented/*
 Pixel2MeshPlusPlus/results/refine_p2mpp_2_inputs/*
+predictions/
