@@ -23,9 +23,7 @@ class Refiner(torch.nn.Module):
         self.cfg = cfg
         self.dropout_p = refiner_dropout
 
-        # ------------------------------------------------------------------
         # Encoder
-        # ------------------------------------------------------------------
         self.layer1 = torch.nn.Sequential(
             torch.nn.Conv3d(1, 32, kernel_size=4, padding=2),
             torch.nn.BatchNorm3d(32),
@@ -48,9 +46,7 @@ class Refiner(torch.nn.Module):
             torch.nn.MaxPool3d(kernel_size=2)
         )
 
-        # ------------------------------------------------------------------
         # Bottleneck (fully‑connected)
-        # ------------------------------------------------------------------
         self.layer4 = torch.nn.Sequential(
             torch.nn.Linear(8192, 2048),
             torch.nn.ReLU(inplace=True),
@@ -62,9 +58,7 @@ class Refiner(torch.nn.Module):
             torch.nn.Dropout(p=self.dropout_p)
         )
 
-        # ------------------------------------------------------------------
         # Decoder
-        # ------------------------------------------------------------------
         self.layer6 = torch.nn.Sequential(
             torch.nn.ConvTranspose3d(128, 64, kernel_size=4, stride=2, bias=False, padding=1),
             torch.nn.BatchNorm3d(64),
@@ -82,9 +76,7 @@ class Refiner(torch.nn.Module):
             torch.nn.Sigmoid()
         )
 
-    # ----------------------------------------------------------------------
     # Forward pass
-    # ----------------------------------------------------------------------
     def forward(self, coarse_volumes: torch.Tensor) -> torch.Tensor:
         """Refine a coarse 32³ occupancy grid.
 
