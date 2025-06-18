@@ -7,7 +7,7 @@ from tqdm import tqdm
 import pyvista as pv
 import trimesh
 import torch
-from trimesh.transformations import euler_matrix, translation_matrix, scale_matrix
+from trimesh.transformations import translation_matrix, scale_matrix
 import numpy as np
 
 logging.basicConfig(level=logging.INFO)
@@ -20,13 +20,15 @@ class VoxelGenerator:
 
     def _get_missing_files(self, files: list = None):
         folder_files = os.listdir(os.path.join(os.getenv("DATA_DIR_PATH"), self.output_dir, "voxels"))
+        logger.info(f"folder files: {len(folder_files)}, files: {len(files)}")
+        folder_files = [f.replace(".pt", ".stl") for f in folder_files]
         missing_meshes = set(files) - set(folder_files)
         return list(missing_meshes)
     
     def _mesh_to_voxel_tensor(self,
                          mesh: trimesh.Trimesh,
                          meta,
-                         res: int = 128,
+                         res: int = 32,
                          fill: bool = True,
                          device: torch.device = torch.device('cpu')) -> torch.BoolTensor:
         """
@@ -66,7 +68,7 @@ class VoxelGenerator:
                 mesh = trimesh.load(os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "meshes", file))
                 metadata = json.loads(Path(os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "images", "metadata", file.replace(".stl", "_cam.json"))).read_text())
                 
-                voxel = self._mesh_to_voxel_tensor(mesh, metadata, res=128, fill=True, device=torch.device('cpu'))
+                voxel = self._mesh_to_voxel_tensor(mesh, metadata, res=32, fill=True, device=torch.device('cpu'))
                 torch.save(voxel, os.path.join(voxels_dir, file.replace(".stl", ".pt")))
         else:
             logger.info("Meshes have already been turned into Voxels.")

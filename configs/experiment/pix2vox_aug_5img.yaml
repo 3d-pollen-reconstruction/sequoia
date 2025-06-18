@@ -1,0 +1,26 @@
+# @package _global_
+
+name: pix2vox_aug_5img
+
+defaults:
+  - override /model: pix2vox
+
+trainer:
+  min_epochs: 100
+  max_epochs: 300
+
+data:
+  n_images: 5
+  batch_size: 24
+  include_augmentations: true
+  image_transforms:
+    _target_: torchvision.transforms.Compose
+    transforms:
+      - _target_: torchvision.transforms.Resize
+        size: [224, 224]
+      - _target_: torchvision.transforms.Grayscale
+        num_output_channels: 3
+      - _target_: torchvision.transforms.ToTensor
+      - _target_: torchvision.transforms.Normalize
+        mean: [0.485, 0.456, 0.406]
+        std:  [0.229, 0.224, 0.225]

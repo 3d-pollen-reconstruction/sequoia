@@ -1,84 +1,96 @@
 import os
-import json
-from pathlib import Path
+from typing import List, Tuple
 
 from dotenv import load_dotenv
 from PIL import Image
-import numpy as np
+from torch.utils.data import Dataset
 import pandas as pd
-import trimesh
-from trimesh.transformations import euler_matrix, translation_matrix, scale_matrix
 import torch
 import torchvision.transforms as transforms
-from torch.utils.data import Dataset
-from sklearn.model_selection import train_test_split
-
-from .utils import list_files
 
 load_dotenv()
 
+MAX_IMAGES_PER_STRIP = 8
+
 class PollenDataset(Dataset):
-    def __init__(self,
-                 image_transforms=None,
-                 mesh_transforms=None,
-                 device: torch.device = torch.device('cpu')
-                 ):
-        self.images_path      = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "images")
-        self.meshes_path      = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "meshes")
-        self.voxels_path      = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "voxels")
-        self.pointclouds_path = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "pointclouds")
-        self.rotations_csv    = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "rotations.csv")
+    def __init__(
+        self,
+        image_transforms: transforms.Compose | None = None,
+        n_images: int = 2,
+        device: torch.device = torch.device("cpu"),
+        file_list: List[str] | None = None,
+    ):
+        if not 1 <= n_images <= MAX_IMAGES_PER_STRIP:
+            raise ValueError(
+                f"n_images must be in [1, {MAX_IMAGES_PER_STRIP}], got {n_images}"
+            )
 
-        self.image_transform  = image_transforms
-        self.mesh_transform   = mesh_transforms  # if you want per‑mesh augmentations
-        self.device           = device
+        self.images_path = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "images")
+        self.voxels_path = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "voxels")
+        self.rotations_csv = os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "rotations.csv")
 
-        self.image_files = sorted(list_files(self.images_path))
-        self.rotations   = pd.read_csv(self.rotations_csv)
+        self.image_transform = image_transforms
+        self.device = device
+        self.n_images = n_images
 
-    def __len__(self):
-        return len(self.image_files)
-
-    def __getitem__(self, idx):
-        # --- load & split stereo image ---
-        fname       = self.image_files[idx]
-        image      = Image.open(os.path.join(self.images_path, fname)).convert("L")
-        w, h       = image.size
-        left_img   = image.crop((0, 0, w//2, h))
-        right_img  = image.crop((w//2, 0, w, h))
-
-        # apply transforms or default ToTensor
-        if self.image_transform:
-            left_tensor  = self.image_transform(left_img).to(torch.float32)
-            right_tensor = self.image_transform(right_img).to(torch.float32)
+        if file_list is None:
+            all_pngs = sorted(
+                fname for fname in os.listdir(self.images_path) if fname.lower().endswith(".png")
+            )
+            self.stems = [png_fname.rsplit(".", 1)[0] for png_fname in all_pngs]
         else:
-            t           = transforms.ToTensor()
-            left_tensor  = t(left_img).squeeze(0).to(torch.float32)
-            right_tensor = t(right_img).squeeze(0).to(torch.float32)
+            self.stems = sorted(file_list)
 
-        # --- load point cloud ---
-        pc_name   = fname.replace(".png", ".npz")
-        pc_data   = np.load(os.path.join(self.pointclouds_path, pc_name))
-        points    = torch.from_numpy(pc_data["points"]).to(torch.float32).to(self.device)
+        self.rotations = pd.read_csv(self.rotations_csv)
 
-        # --- load rotations ---
-        sample_id = fname.split(".")[0]
-        row       = self.rotations.loc[self.rotations['sample'] == sample_id].iloc[0]
-        rotations = torch.tensor(row[1:].astype(float).values, dtype=torch.float32, device=self.device)
+    def __len__(self) -> int:
+        return len(self.stems)
 
-        # --- load & voxelize mesh →
-        mesh_name = fname.replace(".png", ".stl")
-        # mesh_path = os.path.join(self.meshes_path, mesh_name)
-        # meta_path = os.path.join(self.images_path, "metadata", mesh_name.replace(".stl", "_cam.json"))
-        voxels_path      = os.path.join(self.voxels_path, mesh_name.replace(".stl", ".pt"))
-        voxels           = torch.load(voxels_path)
-        
+    def __getitem__(self, idx: int) -> Tuple[Tuple[torch.Tensor, ...], torch.Tensor, torch.Tensor]:
+        stem = self.stems[idx]
 
-        return (left_tensor, right_tensor), points, rotations, voxels
+        strip_path = os.path.join(self.images_path, f"{stem}.png")
+        strip_img = Image.open(strip_path).convert("L")
+        strip_w, strip_h = strip_img.size
 
-def get_train_test_split(test_ratio=0.2, seed=42, **kwargs):
-    dataset = PollenDataset(**kwargs)
-    train_ids, test_ids = train_test_split(
-        list(range(len(dataset))), test_size=test_ratio, random_state=seed
-    )
-    return dataset, train_ids, test_ids
+        if strip_w % strip_h != 0:
+            raise RuntimeError(
+                f"{strip_path} is not an exact grid of squares "
+                f"(width {strip_w} px is not a multiple of height {strip_h} px)."
+            )
+
+        n_available = strip_w // strip_h
+        if self.n_images > n_available:
+            raise RuntimeError(
+                f"Requested {self.n_images} images but only {n_available} available in strip {stem}."
+            )
+
+        to_tensor = transforms.ToTensor()
+        patches: list[torch.Tensor] = []
+
+        for i in range(self.n_images):
+            left, upper = i * strip_h, 0
+            right, lower = left + strip_h, strip_h
+            patch_img = strip_img.crop((left, upper, right, lower))
+
+            tensor = (
+                self.image_transform(patch_img)
+                if self.image_transform
+                else to_tensor(patch_img).squeeze(0)
+            ).to(torch.float32)
+
+            patches.append(tensor)
+
+        images_tuple: Tuple[torch.Tensor, ...] = tuple(patches)
+
+        df_row = self.rotations.loc[self.rotations["sample"] == stem]
+        if df_row.empty:
+            raise KeyError(f"No rotation entry found for sample '{stem}' in {self.rotations_csv}")
+
+        rot_x, rot_y, rot_z = map(float, df_row.iloc[0][["rot_x", "rot_y", "rot_z"]])
+        rotations = torch.tensor([rot_x, rot_y, rot_z], dtype=torch.float32, device=self.device)
+
+        voxels_path = os.path.join(self.voxels_path, f"{stem}.pt")
+        voxels = torch.load(voxels_path)
+
+        return images_tuple, rotations, voxels

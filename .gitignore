@@ -77,6 +77,8 @@ Pixel_Nerf/pollen_augmented/256_res/**
 InstantMesh/pollen/pollen_train/*
 
 InstantMesh/pollen/*
+pretrained/*
+reconstruction/
 Pixel_Nerf/pollen_augmented/**
 Pixel2MeshPlusPlus/data/pollen/test/17767_Common_knapweed_Centaurea_nigra_pollen_grain_00/mesh/model.obj
 Pixel2MeshPlusPlus/data/*.txt
@@ -104,5 +106,4 @@ Pixel2MeshPlusPlus/results/refine_p2mpp_3_inputs/*
 *.mp4
 Pixel2MeshPlusPlus/data/pollen_augmented/*
 Pixel2MeshPlusPlus/results/refine_p2mpp_2_inputs/*
-Pixel2MeshPlusPlus/data/pollen_test/*
-Pixel2MeshPlusPlus/results/*
+predictions/

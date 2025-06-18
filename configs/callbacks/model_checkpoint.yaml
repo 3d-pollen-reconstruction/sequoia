@@ -1,0 +1,18 @@
+model_checkpoint:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+
+  # put checkpoints under ./checkpoints/<cfg.name>/
+  dirpath: "checkpoints/${name}"
+
+  # your own name + epoch number
+  filename: "${name}_epoch{epoch:02d}"
+
+  # monitor validation loss; keep the min
+  monitor: "val/loss"
+  mode: "min"
+
+  # only save the top 3 best models
+  save_top_k: 3
+
+  # do NOT separately save the very last epoch
+  save_last: false

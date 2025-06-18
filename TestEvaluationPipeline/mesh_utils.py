@@ -3,7 +3,6 @@ from scipy.spatial.distance import directed_hausdorff
 import trimesh
 import open3d as o3d
 import numpy as np
-import trimesh
 
 class MeshUtils:
     @staticmethod
@@ -84,18 +83,47 @@ class MeshUtils:
         """
         Voxelizes both meshes and computes IoU.
         """
-        try:
-            vox_pred = mesh_pred.voxelized(pitch)
-            vox_gt = mesh_gt.voxelized(pitch)
-            filled_pred = set(map(tuple, vox_pred.points))
-            filled_gt = set(map(tuple, vox_gt.points))
-            intersection = len(filled_pred & filled_gt)
-            union = len(filled_pred | filled_gt)
-            if union == 0:
-                return np.nan
-            return intersection / union
-        except Exception:
-            return np.nan
+        m_pred = mesh_pred.copy()
+        m_gt = mesh_gt.copy()
+
+        # Center each mesh
+        center_pred = (m_pred.bounds[0] + m_pred.bounds[1]) * 0.5
+        center_gt   = (m_gt.bounds[0]   + m_gt.bounds[1])   * 0.5
+        m_pred.apply_translation(-center_pred)
+        m_gt.apply_translation(-center_gt)
+
+        # Voxelize and fill interiors
+        vox_pred = m_pred.voxelized(pitch).fill()
+        vox_gt   = m_gt.voxelized(pitch).fill()
+
+        # Extract points
+        pts_pred = np.array(vox_pred.points)
+        pts_gt   = np.array(vox_gt.points)
+
+        # Combine for union grid
+        all_pts = np.vstack([pts_pred, pts_gt])
+        mins = all_pts.min(axis=0)
+        
+        # Convert points to integer grid indices
+        idx_pred = np.round((pts_pred - mins) / pitch).astype(int)
+        idx_gt   = np.round((pts_gt   - mins) / pitch).astype(int)
+
+        # Determine grid size
+        max_idx = np.max(np.vstack([idx_pred, idx_gt]), axis=0) + 1
+        grid = np.zeros(max_idx, dtype=bool)
+
+        # Fill union
+        grid[tuple(idx_pred.T)] = True
+        grid[tuple(idx_gt.T)]   = True
+
+        # Compute IoU
+        set_pred = {tuple(idx) for idx in idx_pred}
+        set_gt   = {tuple(idx) for idx in idx_gt}
+        inter = len(set_pred & set_gt)
+        union = len(set_pred | set_gt)
+        iou = 0.0 if union == 0 else inter / union
+
+        return iou
 
     @staticmethod
     def euler_characteristic(mesh):
@@ -110,10 +138,8 @@ class MeshUtils:
         except Exception:
             return np.nan
 
-
-
     @staticmethod
-    def align_icp(mesh_source, mesh_target, n_points=5000, max_iterations=100, threshold=0.05):
+    def align_icp(mesh_source, mesh_target, n_points=5000, max_iterations=10000, threshold=0.05):
         """
         Align mesh_source to mesh_target using Open3D ICP (point-to-plane).
         Returns:
@@ -180,6 +206,3 @@ class MeshUtils:
         pts_src_aligned = (reg_trans @ pts_src_homo.T).T[:, :3]
 
         return mesh_aligned, pts_src_aligned
-
-
-

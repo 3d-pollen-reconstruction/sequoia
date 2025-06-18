@@ -1,122 +1,125 @@
+import gc
 import sys
 import os
-import gc
 import logging
-from typing import Optional
+import rootutils
+from typing import Dict
+from omegaconf import DictConfig, OmegaConf
+import torch
+import lightning.pytorch as pl
+from lightning.pytorch.loggers import WandbLogger
+from hydra.utils import instantiate
+import hydra
 
 from metrics import init_metrics
-import hydra
-from omegaconf import OmegaConf
-import lightning as L
-import torch
-import rootutils
-from hydra.utils import instantiate
-from omegaconf import DictConfig
-from pytorch_lightning.loggers import WandbLogger
 
 sys.path.insert(0, os.getcwd())
 
-PROJECT_ROOT = rootutils.setup_root(
-    __file__, indicator=".project-root", pythonpath=True
-)
-
+PROJECT_ROOT = rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 CONFIG_ROOT = PROJECT_ROOT / "configs"
 
 logger = logging.getLogger(__name__)
 
-def train(cfg: DictConfig) -> None:
-    """
-    Main training function.
 
-    Args:
-        cfg: Hydra configuration object.
-
-    Returns:
-        Tuple of metrics dictionaries.
-    """
+def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
+    """Run a single train–val–test cycle and return validation & test metrics."""
     if cfg.get("seed"):
-        L.seed_everything(cfg.seed, workers=True)
+        pl.seed_everything(cfg.seed, workers=True)
 
-    logger.info(f"Instantiating datamodule <{cfg.data._target_}>")
+    # prepare data
     datamodule = instantiate(cfg.data)
     datamodule.setup("fit")
 
-    logger.info(f"Instantiating model <{cfg.model._target_}>")
-    model = instantiate(cfg.model)
+    # instantiate model without the `frozen` key
+    tmp_model_cfg = OmegaConf.create(OmegaConf.to_container(cfg.model, resolve=True))
+    tmp_model_cfg.pop("frozen", None)
+    model: torch.nn.Module = instantiate(tmp_model_cfg)
 
-    init_metrics(model, "train")
-    init_metrics(model, "val")
-    
-    logger.info("Instantiating callbacks...")
-    callbacks = instantiate(cfg.get("callbacks"))
+    # load pretrained weights if specified
+    if cfg.model.get("pretrained"):
+        ckpt_path = cfg.model.pretrained
+        # force full unpickling of the file (not just weights_only)
+        state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        model.load_state_dict(state, strict=False)
+        logger.info(f"Loaded pretrained weights from {ckpt_path}")
 
-    logger.info("Instantiating loggers...")
-    log_instances = instantiate(cfg.get("logger"))
-    
-    flat_cfg = OmegaConf.to_container(cfg, resolve=True)  
+    # freeze any requested submodules
+    for submod_name in cfg.model.get("frozen", []):
+        submod = getattr(model, submod_name, None)
+        if submod is None:
+            logger.warning(f"Cannot freeze '{submod_name}': not found on model")
+            continue
+        for p in submod.parameters():
+            p.requires_grad = False
+        logger.info(f"Froze parameters in model.{submod_name}")
+
+    # initialize metrics
+    init_metrics("train", model)
+    init_metrics("val", model)
+    init_metrics("test", model)
+
+    # configure WandB
+    flat_cfg = OmegaConf.to_container(cfg, resolve=True)
     wandb_logger = WandbLogger(
         project="reconstruction",
-        name=cfg.get("name"),
-        config=flat_cfg
+        name=cfg.name,
+        config=flat_cfg,
+        reinit=False,
     )
 
-    logger.info(f"Instantiating trainer <{cfg.trainer._target_}>")
-    trainer = instantiate(cfg.trainer, logger=wandb_logger, callbacks=callbacks)
+    # instantiate trainer
+    trainer: pl.Trainer = instantiate(
+        cfg.trainer,
+        logger=wandb_logger,
+        callbacks=instantiate_callbacks(cfg.get("callbacks")),
+    )
 
-    object_dict = {
-        "cfg": cfg,
-        "model": model,
-        "trainer": trainer,
-        "callbacks": callbacks,
-    }
+    # training
+    trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
+    val_metrics = trainer.callback_metrics
 
-    if cfg.get("train"):
-        logger.info("Starting training!")
-        trainer.fit(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
-        logger.info("Training completed.")
-    
-    train_metrics = trainer.callback_metrics
-    logger.info(f"Training metrics callback: {train_metrics}")
-    
-    if cfg.get("test"):
-        logger.info("Starting testing!")
-        ckpt_path = trainer.checkpoint_callback.best_model_path
-        if ckpt_path == "":
-            logger.warning("Best ckpt not found! Using current weights for testing...")
-            ckpt_path = None
-        logger.info(f"Loading best model from {ckpt_path} for testing...")
-        trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
-        logger.info("Testing completed.")
+    # testing
+    datamodule.setup("test")
+    test_metrics = trainer.test(model, datamodule=datamodule)[0]
 
-    test_metrics = trainer.callback_metrics
+    # collect results
+    results = {**val_metrics, **{f"test/{k}": v for k, v in test_metrics.items()}}
 
-    logger.info("Cleaning up...")
+    # cleanup
     torch.cuda.empty_cache()
     gc.collect()
 
-    logger.info("Goodbye!")
+    # log final metrics to WandB and finish
+    for key, val in results.items():
+        wandb_logger.experiment.summary[key] = val
+    wandb_logger.experiment.finish()
 
-    return {**train_metrics, **test_metrics}, object_dict
+    return results
+
+
+def instantiate_callbacks(callbacks_cfg: DictConfig):
+    if not callbacks_cfg:
+        logger.warning("No callback configs found! Skipping..")
+        return []
+
+    if not isinstance(callbacks_cfg, DictConfig):
+        raise TypeError("Callbacks config must be a DictConfig!")
+
+    callbacks = []
+    for _, cb_conf in callbacks_cfg.items():
+        if isinstance(cb_conf, DictConfig) and "_target_" in cb_conf:
+            logger.info(f"Instantiating callback <{cb_conf._target_}>")
+            callbacks.append(instantiate(cb_conf))
+
+    return callbacks
 
 
 @hydra.main(config_path=str(CONFIG_ROOT), config_name="train", version_base="1.3")
-def main(cfg: DictConfig) -> Optional[float]:
-    fold_metrics = {}
+def main(cfg: DictConfig):
+    """Entry point launched by Hydra."""
+    metrics = train_and_evaluate(cfg)
+    logger.info("Final metrics (val + test): %s", metrics)
 
-    for fold in range(cfg.data.n_splits):
-        logger.info(f"Starting fold {fold}")
-        cfg.data.fold_idx = fold
-
-        current_metrics, _ = train(cfg)
-
-        for key, value in current_metrics.items():
-            fold_metrics.setdefault(key, []).append(value)
-        logger.info(f"Fold {fold} Metrics: {current_metrics}")
-
-    averaged_metrics = {key: sum(values)/len(values) for key, values in fold_metrics.items()}
-    logger.info(f"Averaged Metrics across {cfg.data.n_splits} folds: {averaged_metrics}")
-
-    return averaged_metrics
 
 if __name__ == "__main__":
     main()
