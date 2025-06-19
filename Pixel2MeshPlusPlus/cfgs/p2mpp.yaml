@@ -12,8 +12,8 @@ cnn_step: 200
 # train
 lr: 1e-5
 # Custom modification for Pixel2Mesh++ by EtiiR
-num_input_images: 2
-view_indices: [0, 1, 2]
+num_input_images: 11
+view_indices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 epochs: 200
 init_epoch: 200
 gpu_id: 0

@@ -107,3 +107,8 @@ Pixel2MeshPlusPlus/results/refine_p2mpp_3_inputs/*
 Pixel2MeshPlusPlus/data/pollen_augmented/*
 Pixel2MeshPlusPlus/results/refine_p2mpp_2_inputs/*
 predictions/
+Pixel2MeshPlusPlus/data/pollen_test/*
+Pixel2MeshPlusPlus/results/coarse_mvp2m_6_inputs/*
+Pixel2MeshPlusPlus/results/refine_p2mpp_6_inputs/logs/*
+Pixel2MeshPlusPlus/results/refine_p2mpp_augmentation_2_inputs/*
+Pixel2MeshPlusPlus/results/*
