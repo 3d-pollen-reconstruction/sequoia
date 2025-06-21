@@ -226,6 +226,7 @@ class NeRFRenderer(torch.nn.Module):
                 sigmas = sigmas + torch.randn_like(sigmas) * self.noise_std
 
             alphas = 1 - torch.exp(-deltas * torch.relu(sigmas))  # (B, K)
+            alphas = torch.clamp(alphas, 0.0, 1.0)  # Ensure alphas are in [0,1] range
             deltas = None
             sigmas = None
             alphas_shifted = torch.cat(

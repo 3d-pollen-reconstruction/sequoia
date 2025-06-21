@@ -1,12 +1,8 @@
 import logging
-from typing import Optional, Literal, Dict, Sequence
+from typing import Sequence
 import torch
-import torchmetrics
+from torch import nn
 from torchmetrics import MetricCollection
-import matplotlib.pyplot as plt
-import seaborn as sns
-import io
-import numpy as np
 
 from torchmetrics import Metric
 from lightning.pytorch.loggers import NeptuneLogger, WandbLogger
@@ -21,7 +17,6 @@ class IoU3D(Metric):
         threshold (float): Threshold for converting continuous predictions to binary masks. Default is 0.5.
         dist_sync_on_step (bool): Synchronize metric state across processes at each `forward()` before returning the value at `compute()`. Default is False.
     """
-
     def __init__(
         self,
         threshold: float = 0.5,
@@ -75,6 +70,7 @@ class IoU3D(Metric):
             return torch.tensor(1.0, device=self.intersection.device)
         return self.intersection / self.union
 
+
 def init_metrics(
     stage: str,
     metrics: Sequence[Metric] = None
@@ -94,14 +90,25 @@ class MetricsMixin:
     def __init__(self, *args, metric_list: Sequence[Metric]=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.train_metrics = init_metrics("train", metric_list)
-        self.val_metrics   = init_metrics("val",   metric_list)
+        self.metric_collections = nn.ModuleDict({
+            "train_metrics": init_metrics("train", metric_list),
+            "val_metrics":   init_metrics("val",   metric_list),
+            "test_metrics":  init_metrics("test",  metric_list),
+        })
  
     def log_train_metrics(self, preds, target):
         logs = self.train_metrics(preds, target)
-        
         self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
 
     def log_val_metrics(self, preds, target):
         logs = self.val_metrics(preds, target)
+        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
+        
+    def log_test_metrics(self, preds, target):
+        logs = self.test_metrics(preds, target)
+        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
+        
+    def log_stage_metrics(self, stage: str, preds, target):
+        mc = self.metric_collections[f"{stage}_metrics"]
+        logs = mc(preds, target)
         self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)

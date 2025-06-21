@@ -1,0 +1,29 @@
+[project]
+name = "hunyuan3d-2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate>=1.6.0",
+    "diffusers>=0.33.1",
+    "einops>=0.8.1",
+    "fastapi>=0.115.12",
+    "gradio>=5.28.0",
+    "ninja>=1.11.1.4",
+    "numpy>=2.2.5",
+    "omegaconf>=2.3.0",
+    "onnxruntime>=1.21.1",
+    "opencv-python>=4.11.0.86",
+    "pybind11>=2.13.6",
+    "pygltflib>=1.16.4",
+    "pymeshlab>=2023.12.post3",
+    "rembg>=2.0.65",
+    "torch>=2.7.0",
+    "torchvision>=0.22.0",
+    "tqdm>=4.67.1",
+    "transformers>=4.51.3",
+    "trimesh>=4.6.8",
+    "uvicorn>=0.34.2",
+    "xatlas>=0.0.10",
+]

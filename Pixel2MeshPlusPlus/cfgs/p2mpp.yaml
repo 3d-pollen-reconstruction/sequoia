@@ -1,0 +1,30 @@
+is_debug: yes
+# 3 + 3*(512+256+128+64)
+feat_dim: 2883
+# 3 + 3*(16+32+64)
+stage2_feat_dim: 339
+name: 'refine_p2mpp'
+save_path: 'results'
+# about cnn
+load_cnn: yes
+pre_trained_cnn_path: 'results/coarse_mvp2m/models/'
+cnn_step: 200
+# train
+lr: 1e-5
+# Custom modification for Pixel2Mesh++ by EtiiR
+num_input_images: 11
+view_indices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+epochs: 200
+init_epoch: 200
+gpu_id: 0
+restore: false
+train_file_path: 'data/pollen_augmented/train_split.txt'
+train_data_path: 'data/pollen_augmented/train/'
+train_image_path: 'data/pollen_augmented/train'
+train_mesh_root: 'results/coarse_mvp2m/coarse_intermediate/200'
+# test
+test_epoch: 230
+test_file_path: 'data/pollen/test_split.txt'
+test_data_path: 'data/pollen/test/'
+test_image_path: 'data/pollen/test'
+test_mesh_root: 'results/coarse_mvp2m/predict/200'
