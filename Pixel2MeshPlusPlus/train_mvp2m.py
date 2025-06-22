@@ -118,7 +118,11 @@ def main(cfg):
     # ---------------------------------------------------------------
     # Load init ellipsoid and info about vertices and edges
     pkl = pickle.load(open("data/iccv_p2mpp.dat", "rb"))
-    pkl2 = pickle.load(open("data/mean_shape_prior.dat", "rb"))
+    pkl2 = None
+    if args.prior != "default":
+        print(f"Using custom prior from: {args.prior}")
+        pkl2 = pickle.load(open(f"data/{args.prior}.dat", "rb"))
+    
     if pkl2:
         print("Using prior from mean_shape_prior.dat")
         pkl["coord"] = pkl2["coord"]

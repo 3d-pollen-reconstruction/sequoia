@@ -77,7 +77,16 @@ def main(cfg):
 
     model.load(sess=sess, ckpt_path=model_dir, step=step)
 
-    pkl = pickle.load(open('data/iccv_p2mpp.dat', 'rb'))
+    pkl = pickle.load(open("data/iccv_p2mpp.dat", "rb"))
+    pkl2 = None
+    if args.prior != "default":
+        print(f"Using custom prior from: {args.prior}")
+        pkl2 = pickle.load(open(f"data/{args.prior}.dat", "rb"))
+    
+    if pkl2:
+        print("Using prior from mean_shape_prior.dat")
+        pkl["coord"] = pkl2["coord"]
+    print("Available keys in iccv_p2mpp.dat:", pkl.keys())
     feed_dict = construct_feed_dict(pkl, placeholders)
 
     test_number = data.number

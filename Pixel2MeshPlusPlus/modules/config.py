@@ -63,6 +63,7 @@ def create_parser():
     parser.add_argument('--view_indices', nargs='+', type=int, default=None,
                     help='Indices of input views to be used, e.g. 0 1 for 2 views')
     parser.add_argument('--num_input_images', type=int, default=3, help='Number of input images')
+    parser.add_argument('--prior', type=str, default="default", help='Path to prior mesh file')
 
     return parser
 
