@@ -212,5 +212,7 @@ if __name__ == "__main__":
     parser.add_argument('--output', default='./mean_shape_prior.dat', help='Output .dat file name')
     parser.add_argument('--stl_file', default=r"/home2/etienne.roulet/sequoia/Pixel2MeshPlusPlus/data/mean_pollen_shape.stl", help='Input STL file path')
     
+    args = parser.parse_args()
+    
         
-    convert_stl_to_prior(stl_file=stl_file, output_file=parser.parse_args().output)
+    convert_stl_to_prior(stl_file=args.stl_file, output_file=args.output)
