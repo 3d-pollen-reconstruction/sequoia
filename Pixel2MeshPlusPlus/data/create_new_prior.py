@@ -160,6 +160,73 @@ def compute_mean_shape_unit_sphere(meshes, target_vertices=156):
     
     return mean_vertices_normalized
 
+def align_mesh_preserve_shape(vertices):
+    """
+    Center at origin and scale by bounding-box diagonal.
+    This avoids forcing a spherical shape, preserving morphology.
+    """
+    v = vertices.copy().astype(np.float64)
+    
+    # 1) Center at origin
+    centroid = np.mean(v, axis=0)
+    v_centered = v - centroid
+    
+    # 2) Scale to a consistent bounding-box diagonal
+    bbox_min = np.min(v_centered, axis=0)
+    bbox_max = np.max(v_centered, axis=0)
+    diagonal = np.linalg.norm(bbox_max - bbox_min)
+    if diagonal > 1e-8:
+        v_aligned = v_centered / diagonal
+    else:
+        v_aligned = v_centered
+    
+    return v_aligned
+
+def compute_mean_shape_preserving_pollen(meshes, target_vertices=156):
+    """
+    Compute a mean pollen shape that preserves overall morphology (not forcing a unit sphere).
+    """
+    print(f"Computing mean pollen shape with {target_vertices} vertices...")
+    print("Center + bounding-box alignment (preserves shape ratios)")
+    
+    aligned_meshes = []
+    
+    for i, mesh in enumerate(tqdm(meshes, desc="Aligning pollen meshes")):
+        print(f"  Mesh {i+1}/{len(meshes)}:")
+        
+        # Resample each mesh
+        vertices = resample_mesh_uniformly(mesh, num_samples=target_vertices)
+        print(f"    Resampled vertices: {len(vertices)}")
+        
+        # Align but do NOT force the shape to be a sphere
+        aligned_vertices = align_mesh_preserve_shape(vertices)
+        aligned_meshes.append(aligned_vertices)
+    
+    print(f"\nAveraging {len(aligned_meshes)} aligned pollen shapes...")
+    # Stack and mean
+    stacked = np.stack(aligned_meshes, axis=0)  # shape (N, V, 3)
+    mean_vertices = np.mean(stacked, axis=0)    # shape (V, 3)
+    
+    # Optional: scale final shape so its largest dimension is 1
+    # (But keep shape ratios intact)
+    final_bbox_min = mean_vertices.min(axis=0)
+    final_bbox_max = mean_vertices.max(axis=0)
+    final_diagonal = np.linalg.norm(final_bbox_max - final_bbox_min)
+    if final_diagonal > 1e-8:
+        # Set largest dimension = 1
+        mean_vertices = mean_vertices / final_diagonal
+    
+    # Print stats
+    bounds_min = mean_vertices.min(axis=0)
+    bounds_max = mean_vertices.max(axis=0)
+    print(f"\nFinal shape stats (preserving morphology):")
+    print(f"  Bounds in X: [{bounds_min[0]:.4f}, {bounds_max[0]:.4f}]")
+    print(f"  Bounds in Y: [{bounds_min[1]:.4f}, {bounds_max[1]:.4f}]")
+    print(f"  Bounds in Z: [{bounds_min[2]:.4f}, {bounds_max[2]:.4f}]")
+    print(f"  Diagonal: {np.linalg.norm(bounds_max - bounds_min):.4f}")
+    
+    return mean_vertices
+
 def create_mesh_connectivity(vertices, k_neighbors=8):
     """Create mesh connectivity using k-nearest neighbors"""
     nbrs = NearestNeighbors(n_neighbors=k_neighbors+1, algorithm='ball_tree').fit(vertices)
@@ -262,6 +329,70 @@ def create_pixel2mesh_data(mean_vertices):
     
     return data
 
+def align_mesh_with_pca(vertices):
+    """Aligns a mesh to its principal axes using PCA."""
+    # 1. Center the vertices at the origin
+    mean = np.mean(vertices, axis=0)
+    centered_vertices = vertices - mean
+
+    # 2. Compute the covariance matrix of the centered vertices
+    covariance_matrix = np.cov(centered_vertices, rowvar=False)
+
+    # 3. Find the eigenvectors (principal axes) of the covariance matrix
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance_matrix)
+
+    # 4. Sort the eigenvectors by their corresponding eigenvalues in descending order
+    sorted_indices = np.argsort(eigenvalues)[::-1]
+    principal_axes = eigenvectors[:, sorted_indices]
+
+    # 5. Ensure a right-handed coordinate system to prevent mirrored shapes
+    if np.linalg.det(principal_axes) < 0:
+        principal_axes[:, 2] *= -1
+
+    # 6. Rotate the vertices to align with the standard XYZ axes
+    # This is the key step: it puts every mesh in the same orientation
+    aligned_vertices = centered_vertices @ principal_axes
+
+    return aligned_vertices
+
+def compute_mean_shape_with_pca_alignment(meshes, target_vertices=156):
+    """
+    Computes the mean shape by first aligning each mesh to its principal axes.
+    This is the most robust way to preserve features during averaging.
+    """
+    print("Computing mean shape with PCA alignment...")
+    
+    aligned_meshes = []
+    for i, mesh in enumerate(tqdm(meshes, desc="PCA Aligning Meshes")):
+        # 1. Resample to a consistent number of vertices
+        vertices = resample_mesh_uniformly(mesh, target_vertices)
+        
+        # 2. Align the mesh to a standard orientation using PCA
+        pca_aligned_vertices = align_mesh_with_pca(vertices)
+        
+        # 3. Normalize the size after alignment for consistency
+        rms_distance = np.sqrt(np.mean(np.sum(pca_aligned_vertices**2, axis=1)))
+        if rms_distance > 1e-8:
+            pca_aligned_vertices /= rms_distance
+            
+        aligned_meshes.append(pca_aligned_vertices)
+        
+    # 4. Average the now-aligned meshes to get the true mean shape
+    print("\nAveraging all PCA-aligned meshes...")
+    stacked_meshes = np.stack(aligned_meshes, axis=0)
+    mean_shape = np.mean(stacked_meshes, axis=0)
+    
+    # 5. Final scaling of the mean shape to fit in a unit box (preserves shape)
+    max_range = np.max(mean_shape.max(axis=0) - mean_shape.min(axis=0))
+    if max_range > 1e-8:
+        mean_shape /= max_range
+        
+    print("\nFinal Mean Shape Stats (PCA Aligned):")
+    ranges = mean_shape.max(axis=0) - mean_shape.min(axis=0)
+    print(f"  Coordinate ranges: X={ranges[0]:.3f}, Y={ranges[1]:.3f}, Z={ranges[2]:.3f}")
+    
+    return mean_shape
+
 def main():
     stl_directory = r"C:\Users\super\Documents\GitHub\sequoia\data\processed\meshes"
     
@@ -273,46 +404,24 @@ def main():
         return
     
     print(f"\n{'='*60}")
-    print(f"CREATING UNIT SPHERE NORMALIZED MEAN SHAPE")
+    print(f"CREATING MEAN POLLEN SHAPE (PCA ALIGNED)")
     print(f"{'='*60}")
     
     try:
-        mean_vertices = compute_mean_shape_unit_sphere(meshes, target_vertices=156)
+        # Call the new, correct function
+        mean_vertices = compute_mean_shape_with_pca_alignment(meshes, target_vertices=156)
         
         print(f"\n{'='*60}")
         print("Creating Pixel2Mesh++ data structure...")
         pixel2mesh_data = create_pixel2mesh_data(mean_vertices)
         
-        output_file = r"C:\Users\super\Documents\GitHub\sequoia\Pixel2MeshPlusPlus\data\custom_prior_unit_sphere.dat"
+        output_file = r"C:\Users\super\Documents\GitHub\sequoia\Pixel2MeshPlusPlus\data\pollen_mean_shape_prior.dat"
         
         with open(output_file, 'wb') as f:
             pickle.dump(pixel2mesh_data, f)
         
-        print(f"✅ SUCCESS: Saved unit sphere normalized prior to: {output_file}")
+        print(f"✅ SUCCESS: Saved PCA-aligned mean pollen shape to: {output_file}")
         
-        # Final verification
-        print(f"\n{'='*60}")
-        print("FINAL VERIFICATION")
-        print(f"{'='*60}")
-        coord = pixel2mesh_data['coord']
-        distances = np.linalg.norm(coord, axis=1)
-        
-        print(f"Final shape properties:")
-        print(f"  Vertices: {coord.shape[0]}")
-        print(f"  Coordinate bounds:")
-        print(f"    X: [{coord[:,0].min():.3f}, {coord[:,0].max():.3f}]")
-        print(f"    Y: [{coord[:,1].min():.3f}, {coord[:,1].max():.3f}]")
-        print(f"    Z: [{coord[:,2].min():.3f}, {coord[:,2].max():.3f}]")
-        print(f"  Distance from origin:")
-        print(f"    Min: {distances.min():.3f}")
-        print(f"    Max: {distances.max():.3f}")
-        print(f"    Mean: {distances.mean():.3f}")
-        
-        if distances.max() <= 1.01 and distances.min() >= 0.01:
-            print(f"  ✅ Successfully normalized to unit sphere!")
-        else:
-            print(f"  ⚠️  Normalization may need adjustment")
-            
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback

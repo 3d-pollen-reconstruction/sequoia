@@ -228,9 +228,36 @@ def create_reference_comparison(coord):
     print(f"Your sphere ranges:    X={your_ranges[0]:.6f}, Y={your_ranges[1]:.6f}, Z={your_ranges[2]:.6f}")
     print(f"Differences:           X={abs(perfect_ranges[0]-your_ranges[0]):.6f}, Y={abs(perfect_ranges[1]-your_ranges[1]):.6f}, Z={abs(perfect_ranges[2]-your_ranges[2]):.6f}")
 
+def sample_from_mesh_surface(mesh_vertices, mesh_faces, n_samples=200):
+    """Sample points uniformly from mesh surface"""
+    # Calculate face areas
+    face_areas = calculate_face_areas(mesh_vertices, mesh_faces)
+    
+    # Sample faces proportional to their area
+    face_probs = face_areas / np.sum(face_areas)
+    selected_faces = np.random.choice(len(mesh_faces), n_samples, p=face_probs)
+    
+    # Sample points on selected faces
+    surface_points = []
+    for face_idx in selected_faces:
+        # Get random barycentric coordinates
+        r1, r2 = np.random.random(2)
+        if r1 + r2 > 1:
+            r1, r2 = 1 - r1, 1 - r2
+        r3 = 1 - r1 - r2
+        
+        # Get face vertices
+        v1, v2, v3 = mesh_vertices[mesh_faces[face_idx]]
+        
+        # Calculate point on face
+        point = r1 * v1 + r2 * v2 + r3 * v3
+        surface_points.append(point)
+    
+    return np.array(surface_points)
+
 def main():
     # Load the sphere data
-    sphere_file = r"C:\Users\super\Documents\GitHub\sequoia\Pixel2MeshPlusPlus\data\iccv_p2mpp.dat"
+    sphere_file = r"C:\Users\super\Documents\GitHub\sequoia\Pixel2MeshPlusPlus\data\mean_shape_prior.dat"
     
     print("Loading sphere data...")
     data = load_sphere_data(sphere_file)

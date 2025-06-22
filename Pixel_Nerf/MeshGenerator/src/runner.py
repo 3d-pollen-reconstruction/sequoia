@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 
 # --- User settings ---
 CHECKPOINTS_ROOT = r"C:/Users/super/Documents/Github/sequoia/Pixel_Nerf/checkpoints"
-CONF_MAP_PATH = r"C:/Users/super/Documents/Github/sequoia/Eval/MeshGenerator/src/checkpoint_conf_map.json"
+CONF_MAP_PATH = r"./checkpoint_conf_map.json"
 DATADIR = r"C:/Users/super/Documents/Github/shapenet_renderer/128_views/pollen_augmented"
-OUTPUT_ROOT = r"C:/Users/super/Documents/Github/sequoia/Pixel_Nerf/eval/reconstructed"
-PIXELNERF_SCRIPT = r"C:/Users/super/Documents/Github/sequoia/Eval/MeshGenerator/src/pixelnerf.py"
+OUTPUT_ROOT = r"C:/Users/super/Documents/Github/sequoia/Pixel_Nerf/reconstructed"
+PIXELNERF_SCRIPT = r"C:/Users/super/Documents/Github/sequoia/Pixel_Nerf/MeshGenerator/src/pixelnerf.py"
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
 dotenv_path = os.path.join(repo_root, ".env")

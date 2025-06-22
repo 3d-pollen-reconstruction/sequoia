@@ -241,7 +241,7 @@ class EvalMetricsRunner:
         total_objs = len(data_loader)
 
         best_mesh_thresh = None
-        mesh_thresh_candidates = [0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+        mesh_thresh_candidates = [0.1, 1.5, 0.2, 0.5]
 
         # --- Mesh threshold search: only ONCE for the whole test set ---
         if args.gen_meshes and args.find_best_mesh_thresh:
@@ -292,7 +292,7 @@ class EvalMetricsRunner:
                             reso=[128, 128, 128],
                             isosurface=thresh,
                             sigma_idx=3,
-                            eval_batch_size=256,
+                            eval_batch_size=512,
                             coarse=args.coarse,
                             device=device,
                         )
@@ -530,14 +530,31 @@ class EvalMetricsRunner:
                         curr_ssim += ssim
                         curr_psnr += psnr
                         if args.write_compare and has_output:
-                            out_file = os.path.join(
-                                obj_out_dir,
-                                f"{novel_view_idxs[view_idx].item():06}_compare.png",
-                            )
-                            out_im = np.hstack(
-                                (all_rgb[view_idx], rgb_gt_all[view_idx])
-                            )
-                            imageio.imwrite(out_file, (out_im * 255).astype(np.uint8))
+                            import matplotlib.pyplot as plt
+                            from matplotlib import gridspec
+
+                            fig = plt.figure(figsize=(8, 4))
+                            gs = gridspec.GridSpec(1, 2, width_ratios=[1, 1])
+
+                            titles = [
+                                f"Predicted View (ID {novel_view_idxs[view_idx].item()})",
+                                f"Ground Truth (ID {novel_view_idxs[view_idx].item()})"
+                            ]
+                            images_to_plot = [all_rgb[view_idx], rgb_gt_all[view_idx]]
+
+                            for i in range(2):
+                                ax = plt.subplot(gs[i])
+                                ax.imshow(images_to_plot[i])
+                                ax.set_title(titles[i], fontsize=10)
+                                ax.axis("off")
+
+                            fig.suptitle(f"Pollen ID: {obj_name}\nPSNR: {psnr:.2f}  SSIM: {ssim:.3f}", fontsize=12)
+                            plt.tight_layout(rect=[0, 0, 1, 0.88])  # leave space for suptitle
+
+                            compare_path = os.path.join(obj_out_dir, f"{novel_view_idxs[view_idx].item():06}_compare_labeled.png")
+                            plt.savefig(compare_path, dpi=300)
+                            plt.close(fig)
+
                 curr_psnr /= n_gen_views
                 curr_ssim /= n_gen_views
                 curr_cnt = 1
