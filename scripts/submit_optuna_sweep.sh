@@ -16,4 +16,4 @@ module load singularity
 SIF_PATH=./singularity/pix2vox.sif
 
 singularity exec --nv "$SIF_PATH" \
-  python train.py -m +sweep=pix2vox_optuna "$@"
+  python core/train.py -m +sweep=pix2vox_optuna "$@"
