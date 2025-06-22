@@ -118,7 +118,13 @@ def main(cfg):
     # ---------------------------------------------------------------
     # Load init ellipsoid and info about vertices and edges
     pkl = pickle.load(open("data/iccv_p2mpp.dat", "rb"))
+    pkl2 = pickle.load(open("data/mean_shape_prior.dat", "rb"))
+    if pkl2:
+        print("Using prior from mean_shape_prior.dat")
+        pkl["coord"] = pkl2["coord"]
     print("Available keys in iccv_p2mpp.dat:", pkl.keys())
+
+        
     # Construct Feed dict
     feed_dict = construct_feed_dict(pkl, placeholders)
     # ---------------------------------------------------------------

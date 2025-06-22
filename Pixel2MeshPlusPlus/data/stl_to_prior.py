@@ -29,8 +29,8 @@ def normalize_to_unit_sphere(vertices):
     
     # Verify normalization
     final_distances = np.linalg.norm(vertices_normalized, axis=1)
-    print(f"✓ Normalized - Max distance: {np.max(final_distances):.3f}")
-    print(f"✓ Bounds: X[{vertices_normalized[:,0].min():.3f}, {vertices_normalized[:,0].max():.3f}], "
+    print(f"Normalized - Max distance: {np.max(final_distances):.3f}")
+    print(f"Bounds: X[{vertices_normalized[:,0].min():.3f}, {vertices_normalized[:,0].max():.3f}], "
           f"Y[{vertices_normalized[:,1].min():.3f}, {vertices_normalized[:,1].max():.3f}], "
           f"Z[{vertices_normalized[:,2].min():.3f}, {vertices_normalized[:,2].max():.3f}]")
     
@@ -166,10 +166,10 @@ def resample_if_needed(mesh, target_vertices=156):
     """Resample mesh if it doesn't have exactly 156 vertices"""
     vertices = np.array(mesh.vertices)
     if len(vertices) == target_vertices:
-        print(f"✓ Mesh already has {target_vertices} vertices")
+        print(f"Mesh already has {target_vertices} vertices")
         return vertices
     
-    print(f"⚠️ Mesh has {len(vertices)} vertices, resampling to {target_vertices}...")
+    print(f"Mesh has {len(vertices)} vertices, resampling to {target_vertices}...")
     # Simple resampling using furthest point sampling
     return furthest_point_sampling(vertices, target_vertices)
 
@@ -183,7 +183,7 @@ def convert_stl_to_prior(stl_file, output_file):
         # Resample to exactly 156 vertices if needed
         vertices = resample_if_needed(mesh, target_vertices=156)
         
-        # ALWAYS normalize to unit sphere (crucial for Pixel2Mesh++)
+
         vertices = normalize_to_unit_sphere(vertices)
         
         # Create Pixel2Mesh++ data structure
@@ -193,14 +193,14 @@ def convert_stl_to_prior(stl_file, output_file):
         with open(output_file, 'wb') as f:
             pickle.dump(pixel2mesh_data, f)
             
-        print(f"✅ SUCCESS: Saved normalized prior to: {output_file}")
-        print(f"    Coordinate ranges: X=[{vertices[:,0].min():.3f}, {vertices[:,0].max():.3f}], "
+        print(f"SUCCESS: Saved normalized prior to: {output_file}")
+        print(f"Coordinate ranges: X=[{vertices[:,0].min():.3f}, {vertices[:,0].max():.3f}], "
               f"Y=[{vertices[:,1].min():.3f}, {vertices[:,1].max():.3f}], "
               f"Z=[{vertices[:,2].min():.3f}, {vertices[:,2].max():.3f}]")
-        print(f"    Max distance from origin: {np.max(np.linalg.norm(vertices, axis=1)):.3f}")
+        print(f"Max distance from origin: {np.max(np.linalg.norm(vertices, axis=1)):.3f}")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -210,7 +210,7 @@ def convert_stl_to_prior(stl_file, output_file):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Convert STL file to Pixel2Mesh++ prior format')
     parser.add_argument('--output', default='./mean_shape_prior.dat', help='Output .dat file name')
-    stl_file = r"C:\Users\super\Documents\Github\sequoia\Pixel2MeshPlusPlus\data\mean_pollen_shape.stl"
+    stl_file = r"/home2/etienne.roulet/sequoia/Pixel2MeshPlusPlus/data/mean_pollen_shape.stl"
     
         
     convert_stl_to_prior(stl_file=stl_file, output_file=parser.parse_args().output)

@@ -7,13 +7,13 @@ batch_size: 16
 gpu_id: 0
 is_debug: false
 feat_dim: 2883
-name: 'coarse_mvp2m_2_inputs'
+name: 'coarse_mvp2m_mean_prior'
 save_path: 'results'
 num_input_images: 2
 view_indices: [0, 1]
-train_file_path: 'data/pollen/train_split.txt'
-train_data_path: 'data/pollen/train/'
-train_image_path: 'data/pollen/train'
+train_file_path: 'data/pollen_augmented/train_split.txt'
+train_data_path: 'data/pollen_augmented/train/'
+train_image_path: 'data/pollen_augmented/train'
 
 test_file_path: 'data/pollen/test_split.txt'
 test_data_path: 'data/pollen/test/'
