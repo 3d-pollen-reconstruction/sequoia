@@ -37,7 +37,7 @@ class MeshProcessor:
                 mesh = trimesh.load_mesh(os.path.join(mesh_path, file))
 
                 # turning the mesh into a pyvista mesh for simplification
-                mesh = pv.wrap(mesh)                
+                mesh = pv.wrap(mesh)      
                 simplified_mesh = self._simplify_mesh(mesh)
                 
                 out_mesh_path = os.path.join(meshes_dir, file)
