@@ -210,7 +210,7 @@ def convert_stl_to_prior(stl_file, output_file):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Convert STL file to Pixel2Mesh++ prior format')
     parser.add_argument('--output', default='./mean_shape_prior.dat', help='Output .dat file name')
-    stl_file = r"/home2/etienne.roulet/sequoia/Pixel2MeshPlusPlus/data/mean_pollen_shape.stl"
+    parser.add_argument('--stl_file', default=r"/home2/etienne.roulet/sequoia/Pixel2MeshPlusPlus/data/mean_pollen_shape.stl", help='Input STL file path')
     
         
     convert_stl_to_prior(stl_file=stl_file, output_file=parser.parse_args().output)
