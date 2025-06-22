@@ -15,4 +15,4 @@ IMG="./singularity/pix2vox.sif"
 BIND="--bind ${SLURM_SUBMIT_DIR}:/workspace"
 
 /usr/bin/singularity exec --nv $BIND "$IMG" \
-  python3 train.py -m +sweep=pix2vox_optuna "$@"
+  python3 core/train.py -m +sweep=pix2vox_optuna "$@"
