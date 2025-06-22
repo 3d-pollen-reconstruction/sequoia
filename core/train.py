@@ -119,6 +119,7 @@ def main(cfg: DictConfig):
     """Entry point launched by Hydra."""
     metrics = train_and_evaluate(cfg)
     logger.info("Final metrics (val + test): %s", metrics)
+    return metrics["val/loss"]
 
 
 if __name__ == "__main__":

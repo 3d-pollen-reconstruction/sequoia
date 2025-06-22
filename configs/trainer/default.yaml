@@ -1,7 +1,7 @@
 _target_: lightning.pytorch.Trainer
 
 min_epochs: 250
-max_epochs: 250
+max_epochs: 400
 
 accelerator: "auto"
 devices: "auto"
