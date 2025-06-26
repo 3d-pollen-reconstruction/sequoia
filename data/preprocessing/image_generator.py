@@ -164,7 +164,7 @@ class ImageGenerator:
             bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4]
         )
         distance = max_dim * 2.5 if max_dim > 0 else 100
-        base_az = float(np.random.uniform(0, 360))             # ★ NEW
+        base_az = float(np.random.uniform(0, 360))
 
         # -- renderers & cameras --------------------------------------------
         renderers, cam_meta = self._setup_renderers_8(

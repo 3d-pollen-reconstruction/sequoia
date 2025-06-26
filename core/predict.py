@@ -47,18 +47,24 @@ def _stack_views_to_imgs(views: Tuple[torch.Tensor, ...]) -> torch.Tensor:
 
 
 def _run_model(model, views, rotations):
-    """Adaptive call that works for 1- or 2-arg forward()."""
-    sig_len = len(inspect.signature(model.forward).parameters)
+    """Adaptive call that works for models with different forward() signatures."""
+    # Get the parameter names of the model's forward method (excluding 'self')
+    params = list(inspect.signature(model.forward).parameters.keys())
+    sig_len = len(params)
 
     if sig_len == 1:
+        # Handles models that take a single stacked tensor of images
         imgs = (model._build_img_batch(tuple(views))
                 if hasattr(model, "_build_img_batch")
                 else _stack_views_to_imgs(tuple(views)))
         return model(imgs.to(views[0].device))
 
     elif sig_len == 2:
-        return model(views, rotations)
-
+        if params[1] == 'rotations':
+            return model(views, rotations)
+        else:
+            return model(list(views))
+            
     else:
         raise RuntimeError(f"Unsupported forward() signature with {sig_len} positional args.")
 
@@ -70,7 +76,8 @@ def _select_latest_checkpoint(exp_name: str, user_ckpt_path: str | None) -> str:
 
     ckpt_dir = os.path.join("checkpoints", exp_name)
     if not os.path.isdir(ckpt_dir):
-        raise FileNotFoundError(f"Checkpoint directory not found: {ckpt_dir}")
+        logger.info("Checkpoint directory '%s' does not exist. Assuming no checkpoints.")
+        return ""
 
     pattern = rf"^{re.escape(exp_name)}_epochepoch=(\d+)\.ckpt$"
     candidates: list[tuple[int, str]] = []
@@ -82,7 +89,9 @@ def _select_latest_checkpoint(exp_name: str, user_ckpt_path: str | None) -> str:
         raise FileNotFoundError(f"No checkpoints matching '{pattern}' in {ckpt_dir}")
 
     _, latest_file = max(candidates, key=lambda x: x[0])
-    return os.path.join(ckpt_dir, latest_file)
+    resolved_dir = os.path.join(ckpt_dir, latest_file)
+    logger.info("Using checkpoint: %s", resolved_dir)
+    return resolved_dir
 
 
 def predict_and_export(cfg: DictConfig) -> None:
@@ -94,7 +103,6 @@ def predict_and_export(cfg: DictConfig) -> None:
 
     exp_name = cfg.name
     ckpt_path = _select_latest_checkpoint(exp_name, cfg.get("ckpt_path"))
-    logger.info("Using checkpoint: %s", ckpt_path)
 
     # Data
     datamodule = instantiate(cfg.data)
@@ -106,6 +114,7 @@ def predict_and_export(cfg: DictConfig) -> None:
     # --- Model instantiation mirroring training script ----------------------
     tmp_model_cfg = OmegaConf.create(OmegaConf.to_container(cfg.model, resolve=True))
     tmp_model_cfg.pop("frozen", None)  # remove unsupported key
+    tmp_model_cfg.pop("pretrained", None)  # remove unsupported key
     model: torch.nn.Module = instantiate(tmp_model_cfg)
 
     # Freeze sub‑modules (harmless at inference, but keeps parity with training)
@@ -120,8 +129,10 @@ def predict_and_export(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------------
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    state = torch.load(ckpt_path, map_location=device)
-    model.load_state_dict(state.get("state_dict", state), strict=False)
+    if ckpt_path != "":
+        state = torch.load(ckpt_path, map_location=device)
+        model.load_state_dict(state.get("state_dict", state), strict=False)
+    
     model.to(device).eval()
 
     out_dir = os.path.join("predictions", exp_name)
