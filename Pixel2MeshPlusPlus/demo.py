@@ -18,6 +18,7 @@ from utils.tools import construct_feed_dict, load_demo_image
 
 
 def main(cfg):
+    tf.compat.v1.reset_default_graph()  # ✅ Add this line to clear previous graph
     os.environ['CUDA_VISIBLE_DEVICES'] = str(0)
     # ---------------------------------------------------------------
     # Set random seed
@@ -46,6 +47,8 @@ def main(cfg):
         'faces_triangle': [tf.placeholder(tf.int32, shape=(None, 3)) for _ in range(num_blocks)],
         'sample_adj': [tf.placeholder(tf.float32, shape=(43, 43)) for _ in range(num_supports)],
     }
+    placeholders['num_input_images'] = cfg.num_input_images  # ✅ Add this line
+
 
     # step = cfg.test_epoch
     # root_dir = os.path.join(cfg.save_path, cfg.name)
