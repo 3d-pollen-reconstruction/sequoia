@@ -15,9 +15,9 @@ lr: 1e-5
 num_input_images: 2
 view_indices: [0, 1]
 epochs: 30
-init_epoch: 200
+init_epoch: 210
 gpu_id: 0
-restore: false
+restore: true
 train_file_path: 'data/pollen_augmented/train_split.txt'
 train_data_path: 'data/pollen_augmented/train/'
 train_image_path: 'data/pollen_augmented/train'
