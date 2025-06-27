@@ -77,6 +77,9 @@ class Model(object):
         # print(self.vars)
         saver = tf.train.Saver(self.vars)
         save_path = os.path.join(ckpt_path, '{}.ckpt-{}'.format(self.name, step))
+        if not os.path.exists(ckpt_path):
+            chkpt_path = os.path.join(ckpt_path, 'mvp2m')
+            ckpt_path = os.path.join(ckpt_path, '{}.ckpt'.format(self.name))
         saver.restore(sess, save_path)
         print('Model restored from file: {}, epoch {}'.format(save_path, step))
 
@@ -87,7 +90,12 @@ class MeshNetMVP2M(Model):
         super(MeshNetMVP2M, self).__init__(**kwargs)
         
         if 'name' not in kwargs or not kwargs['name']:
-            kwargs['name'] = 'meshnet'
+            if args.restore:
+                kwargs['name'] = 'meshnetmvp2m'
+            else:
+                kwargs['name'] = 'meshnet'
+
+
         super(MeshNetMVP2M, self).__init__(**kwargs)
 
         self.inputs = placeholders['features']

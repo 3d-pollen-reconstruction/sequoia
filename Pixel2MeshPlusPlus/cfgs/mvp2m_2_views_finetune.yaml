@@ -1,8 +1,8 @@
 lr: 1e-4
-init_epoch: 0
+init_epoch: 50
 epochs: 200
 test_epoch: 200
-restore: false
+restore: true
 batch_size: 16
 gpu_id: 0
 is_debug: false
