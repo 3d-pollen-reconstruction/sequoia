@@ -1,16 +1,16 @@
 lr: 1e-4
-init_epoch: 0
+init_epoch: 50
 epochs: 200
 test_epoch: 200
-restore: false
+restore: true
 batch_size: 16
 gpu_id: 0
 is_debug: false
 feat_dim: 2883
-name: 'coarse_mvp2m_augmentation_2_inputs_pretrained'
+name: 'coarse_mvp2m_augmentation_2_inputs_freezed'
 save_path: 'results'
 num_input_images: 2
-freeze: true
+freeze_encoder: true
 # Custom modification
 view_indices: [0, 1]
 train_file_path: 'data/pollen_augmented/train_split.txt'
