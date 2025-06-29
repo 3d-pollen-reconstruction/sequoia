@@ -85,6 +85,25 @@ def main(cfg):
     print("=> build model")
     # Define model
     model = MeshNetMVP2M(placeholders, logging=True, args=cfg)
+    
+    # Freeze encoder variables if requested
+    if cfg.freeze_encoder:
+        print("=> Freezing encoder variables")
+        encoder_vars = [var for var in tf.trainable_variables() 
+                       if any(keyword in var.name.lower() for keyword in ['encoder', 'resnet', 'vgg', 'conv2d', 'cnn'])]
+        print(f"Found {len(encoder_vars)} encoder variables to freeze:")
+        for var in encoder_vars[:5]:  # Show first 5 variables
+            print(f"  {var.name}: {var.shape}")
+        if len(encoder_vars) > 5:
+            print(f"  ... and {len(encoder_vars) - 5} more")
+        
+        # Get non-encoder variables for training
+        trainable_vars = [var for var in tf.trainable_variables() if var not in encoder_vars]
+        print(f"Training {len(trainable_vars)} non-encoder variables")
+        
+        # Update the optimizer to only train non-encoder variables
+        model.opt_op = model.optimizer.minimize(model.loss, var_list=trainable_vars)
+    
     # ---------------------------------------------------------------
     print("=> load data")
     print("Train data file path:", cfg.train_file_path)

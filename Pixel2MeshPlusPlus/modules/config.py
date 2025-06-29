@@ -64,6 +64,7 @@ def create_parser():
                     help='Indices of input views to be used, e.g. 0 1 for 2 views')
     parser.add_argument('--num_input_images', type=int, default=3, help='Number of input images')
     parser.add_argument('--prior', type=str, default="default", help='Path to prior mesh file')
+    parser.add_argument('--freeze_encoder', type=str2bool, default=False, help='Freeze encoder weights during training')
 
     return parser
 
