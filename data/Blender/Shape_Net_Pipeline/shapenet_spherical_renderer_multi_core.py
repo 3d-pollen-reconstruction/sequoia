@@ -49,10 +49,10 @@ if opt.mesh_fpath and opt.split_name and opt.object_name:
 
     if opt.orthogonal:
         cam_locations = util.get_orthogonal_camera_positions(sphere_radius, center=(0, 0, 0))
-    #elif opt.split_name == 'train':
-    #    cam_locations = util.sample_spherical(opt.num_observations, sphere_radius)
-    #else:
-       # cam_locations = util.get_archimedean_spiral(sphere_radius, 250)
+    elif opt.split_name == 'train':
+        cam_locations = util.sample_spherical(opt.num_observations, sphere_radius)
+    else:
+       cam_locations = util.get_archimedean_spiral(sphere_radius, 250)
 
     cv_poses = util.look_at(cam_locations, np.zeros((1, 3)))
     blender_poses = [util.cv_cam2world_to_bcam2world(m) for m in cv_poses]

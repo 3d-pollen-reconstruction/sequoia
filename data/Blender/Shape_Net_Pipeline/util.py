@@ -225,8 +225,8 @@ def get_archimedean_spiral(sphere_radius, num_steps=250):
 
 def get_orthogonal_camera_positions(sphere_radius, center=(0, 0, 0)):
     """
-    Returns 6 camera positions at specified angles around the Y axis (XZ plane):
-    0°, 90°, 120°, 160°, 270°, 310°
+    Returns 8 camera positions at specified angles around the Y axis (XZ plane):
+    0, 90, 180, 270 degrees, and the diagonals at 45, 135, 225, and 315 degrees.
     All looking at the center.
     """
     angles_deg = [0, 90, 180, 270, 45, 135, 225, 315]
