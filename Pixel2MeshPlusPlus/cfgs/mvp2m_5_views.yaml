@@ -1,0 +1,25 @@
+lr: 1e-4
+init_epoch: 0
+epochs: 200
+test_epoch: 200
+restore: false
+batch_size: 16
+gpu_id: 0
+is_debug: false
+feat_dim: 2883
+name: 'coarse_mvp2m_augmentation_5_inputs'
+save_path: 'results'
+num_input_images: 5
+# Custom modification
+view_indices: [0, 1, 2, 3, 4]
+train_file_path: 'data/pollen_augmented/train_split.txt'
+train_data_path: 'data/pollen_augmented/train/'
+train_image_path: 'data/pollen_augmented/train'
+
+test_file_path: 'data/pollen/test_split.txt'
+test_data_path: 'data/pollen/test/'
+test_image_path: 'data/pollen/test'
+
+coarse_result_file_path: 'data/pollen_augmented/train_split.txt'
+coarse_result_data_path: 'data/pollen_augmented/train'
+coarse_result_image_path: 'data/pollen_augmented/train'

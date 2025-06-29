@@ -77,6 +77,23 @@ class Model(object):
         # print(self.vars)
         saver = tf.train.Saver(self.vars)
         save_path = os.path.join(ckpt_path, '{}.ckpt-{}'.format(self.name, step))
+        
+        # Check if the checkpoint exists using TensorFlow's built-in method
+        if not tf.train.checkpoint_exists(save_path):
+            # Try alternative path structure
+            alt_ckpt_path = os.path.join(ckpt_path, 'mvp2m')
+            alt_save_path = os.path.join(alt_ckpt_path, '{}.ckpt-{}'.format(self.name, step))
+            if tf.train.checkpoint_exists(alt_save_path):
+                save_path = alt_save_path
+            else:
+                # List available checkpoints for debugging
+                print(f"Checkpoint not found at: {save_path}")
+                if os.path.exists(ckpt_path):
+                    print(f"Available files in {ckpt_path}:")
+                    for f in os.listdir(ckpt_path):
+                        print(f"  {f}")
+                raise FileNotFoundError(f"Checkpoint not found: {save_path}")
+        
         saver.restore(sess, save_path)
         print('Model restored from file: {}, epoch {}'.format(save_path, step))
 
@@ -87,7 +104,12 @@ class MeshNetMVP2M(Model):
         super(MeshNetMVP2M, self).__init__(**kwargs)
         
         if 'name' not in kwargs or not kwargs['name']:
-            kwargs['name'] = 'meshnet'
+            if args.restore:
+                kwargs['name'] = 'meshnetmvp2m'
+            else:
+                kwargs['name'] = 'meshnet'
+
+
         super(MeshNetMVP2M, self).__init__(**kwargs)
 
         self.inputs = placeholders['features']
