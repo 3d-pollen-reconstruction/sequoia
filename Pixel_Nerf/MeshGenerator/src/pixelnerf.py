@@ -241,7 +241,7 @@ class EvalMetricsRunner:
         total_objs = len(data_loader)
 
         best_mesh_thresh = None
-        mesh_thresh_candidates = [0.1, 1.5, 0.2, 0.5]
+        mesh_thresh_candidates = [0.1, 0.15, 0.2, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
 
         # --- Mesh threshold search: only ONCE for the whole test set ---
         if args.gen_meshes and args.find_best_mesh_thresh:
