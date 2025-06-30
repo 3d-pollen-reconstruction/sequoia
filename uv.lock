@@ -109,16 +109,17 @@ wheels = [
 
 [[package]]
 name = "alembic"
-version = "1.15.2"
+version = "1.6.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mako" },
+    { name = "python-dateutil" },
+    { name = "python-editor" },
     { name = "sqlalchemy" },
-    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e6/57/e314c31b261d1e8a5a5f1908065b4ff98270a778ce7579bd4254477209a7/alembic-1.15.2.tar.gz", hash = "sha256:1c72391bbdeffccfe317eefba686cb9a3c078005478885413b95c3b26c57a8a7", size = 1925573 }
+sdist = { url = "https://files.pythonhosted.org/packages/2b/cc/5e450e60509b9a68fd761f2fa9ccb6fb9e63d7f9c2b60703bec2e5fd1840/alembic-1.6.5.tar.gz", hash = "sha256:a21fedebb3fb8f6bbbba51a11114f08c78709377051384c9c5ead5705ee93a51", size = 1174376 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/41/18/d89a443ed1ab9bcda16264716f809c663866d4ca8de218aa78fd50b38ead/alembic-1.15.2-py3-none-any.whl", hash = "sha256:2e76bd916d547f6900ec4bb5a90aeac1485d2c92536923d0b138c02b126edc53", size = 231911 },
+    { url = "https://files.pythonhosted.org/packages/d5/80/ef186e599a57d0e4cb78fc76e0bfc2e6953fa9716b2a5cf2de0117ed8eb5/alembic-1.6.5-py2.py3-none-any.whl", hash = "sha256:e78be5b919f5bb184e3e0e2dd1ca986f2362e29a2bc933c446fe89f39dbe4e9c", size = 164663 },
 ]
 
 [[package]]
@@ -903,6 +904,20 @@ wheels = [
 ]
 
 [[package]]
+name = "hydra-optuna-sweeper"
+version = "1.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "alembic" },
+    { name = "hydra-core" },
+    { name = "optuna" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1c/82/8e379880540005f108d2147d92a2cb18951c56c0cc4b1c6fd4a8d56671dd/hydra-optuna-sweeper-1.1.2.tar.gz", hash = "sha256:78e5fcbcef8c2c61ce880f21623a17f01b9049d2ff1f51b6d84d85f1f824a789", size = 6432 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/cd/1cb313f616337ff69bd0500b9106651aff2904d8f69f987331e3070a3be7/hydra_optuna_sweeper-1.1.2-py3-none-any.whl", hash = "sha256:59e811c1299fa53859a6bbe78b1fbcbe6048c88e8c9b092b82f50ac10bc7612f", size = 6940 },
+]
+
+[[package]]
 name = "idna"
 version = "3.10"
 source = { registry = "https://pypi.org/simple" }
@@ -1664,6 +1679,21 @@ wheels = [
 ]
 
 [[package]]
+name = "mesh-to-sdf"
+version = "0.0.15"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyopengl" },
+    { name = "pyrender" },
+    { name = "scikit-image" },
+    { name = "scikit-learn" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/14/c6/de562197f77c392bb439b0abc220534502e10420d1cb693a0cfffb8031a2/mesh-to-sdf-0.0.15.tar.gz", hash = "sha256:01c8985c8623aaaa2964dbc1de0513f5f9d6748c47a38eb1252cb087de07bd8e", size = 15151 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f7/53/aeea1c533838656f638c6ceebadb556f48c6a132c16ef94062302c65442d/mesh_to_sdf-0.0.15-py3-none-any.whl", hash = "sha256:bd487bef1461dd18e63b194879cd7177d9340fd1eaf61ed98b2efbe23c2180c6", size = 14500 },
+]
+
+[[package]]
 name = "meshio"
 version = "5.3.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1953,6 +1983,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/dc/4fc7c0283abe0981e3b89f9b332a134e237dd476b0c018e1e21083310c31/numpy-2.2.4-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:ee4d528022f4c5ff67332469e10efe06a267e32f4067dc76bb7e2cddf3cd25ff", size = 17879998 },
     { url = "https://files.pythonhosted.org/packages/e5/2b/878576190c5cfa29ed896b518cc516aecc7c98a919e20706c12480465f43/numpy-2.2.4-cp313-cp313t-win32.whl", hash = "sha256:05c076d531e9998e7e694c36e8b349969c56eadd2cdcd07242958489d79a7286", size = 6366896 },
     { url = "https://files.pythonhosted.org/packages/3e/05/eb7eec66b95cf697f08c754ef26c3549d03ebd682819f794cb039574a0a6/numpy-2.2.4-cp313-cp313t-win_amd64.whl", hash = "sha256:188dcbca89834cc2e14eb2f106c96d6d46f200fe0200310fc29089657379c58d", size = 12739119 },
+]
+
+[[package]]
+name = "numpy-stl"
+version = "3.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "python-utils" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cb/80/96366d1b69223d4ca55fca30f158096df169b00aa6b4dd963025980e7ede/numpy_stl-3.2.0.tar.gz", hash = "sha256:5a20c3f79cddaa0abc6a4b99f5486aceed4f88152f29b19a57acc844e183fd4d", size = 824382 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ea/2c/e17b8814050427929077639d35a42187a006922600d4840475bdc5f64ebb/numpy_stl-3.2.0-py3-none-any.whl", hash = "sha256:697c81b107231362460aaedf4647e81ba54f54f59c896772fea7904c9c439da5", size = 20775 },
 ]
 
 [[package]]
@@ -2759,12 +2802,33 @@ wheels = [
 ]
 
 [[package]]
+name = "python-editor"
+version = "1.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/85/78f4a216d28343a67b7397c99825cff336330893f00601443f7c7b2f2234/python-editor-1.0.4.tar.gz", hash = "sha256:51fda6bcc5ddbbb7063b2af7509e43bd84bfc32a4ff71349ec7847713882327b", size = 7132 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/d3/201fc3abe391bbae6606e6f1d598c15d367033332bd54352b12f35513717/python_editor-1.0.4-py3-none-any.whl", hash = "sha256:1bf6e860a8ad52a14c3ee1252d5dc25b2030618ed80c022598f00176adc8367d", size = 4877 },
+]
+
+[[package]]
 name = "python-json-logger"
 version = "3.3.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/9e/de/d3144a0bceede957f961e975f3752760fbe390d57fbe194baf709d8f1f7b/python_json_logger-3.3.0.tar.gz", hash = "sha256:12b7e74b17775e7d565129296105bbe3910842d9d0eb083fc83a6a617aa8df84", size = 16642 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/08/20/0f2523b9e50a8052bc6a8b732dfc8568abbdc42010aef03a2d750bdab3b2/python_json_logger-3.3.0-py3-none-any.whl", hash = "sha256:dd980fae8cffb24c13caf6e158d3d61c0d6d22342f932cb6e9deedab3d35eec7", size = 15163 },
+]
+
+[[package]]
+name = "python-utils"
+version = "3.9.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/4c/ef8b7b1046d65c1f18ca31e5235c7d6627ca2b3f389ab1d44a74d22f5cc9/python_utils-3.9.1.tar.gz", hash = "sha256:eb574b4292415eb230f094cbf50ab5ef36e3579b8f09e9f2ba74af70891449a0", size = 35403 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/69/31c82567719b34d8f6b41077732589104883771d182a9f4ff3e71430999a/python_utils-3.9.1-py2.py3-none-any.whl", hash = "sha256:0273d7363c7ad4b70999b2791d5ba6b55333d6f7a4e4c8b6b39fb82b5fab4613", size = 32078 },
 ]
 
 [[package]]
@@ -3293,6 +3357,7 @@ dependencies = [
     { name = "dotmap" },
     { name = "fast-simplification" },
     { name = "hydra-core" },
+    { name = "hydra-optuna-sweeper" },
     { name = "ipdb" },
     { name = "ipykernel" },
     { name = "ipytest" },
@@ -3303,9 +3368,11 @@ dependencies = [
     { name = "manifold" },
     { name = "manifold3d" },
     { name = "matplotlib" },
+    { name = "mesh-to-sdf" },
     { name = "meshio" },
     { name = "nbformat" },
     { name = "numpy" },
+    { name = "numpy-stl" },
     { name = "omegaconf" },
     { name = "open3d" },
     { name = "opencv-python" },
@@ -3349,6 +3416,7 @@ requires-dist = [
     { name = "dotmap", specifier = ">=1.3.30" },
     { name = "fast-simplification", specifier = ">=0.1.9" },
     { name = "hydra-core", specifier = ">=1.3.2" },
+    { name = "hydra-optuna-sweeper", specifier = ">=1.1.2" },
     { name = "ipdb", specifier = ">=0.13.13" },
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "ipytest", specifier = ">=0.14.2" },
@@ -3359,9 +3427,11 @@ requires-dist = [
     { name = "manifold", specifier = ">=0.2.0" },
     { name = "manifold3d", specifier = ">=3.0.1" },
     { name = "matplotlib", specifier = ">=3.10.0" },
+    { name = "mesh-to-sdf", specifier = ">=0.0.15" },
     { name = "meshio", specifier = ">=5.3.5" },
     { name = "nbformat", specifier = ">=5.10.4" },
     { name = "numpy", specifier = ">=2.2.3" },
+    { name = "numpy-stl", specifier = ">=3.2.0" },
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "open3d", specifier = ">=0.19.0" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },

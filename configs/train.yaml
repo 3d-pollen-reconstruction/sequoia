@@ -2,12 +2,14 @@
 
 defaults:
   - _self_
-  - model: visual_hull
   - data: default
   - trainer: default
-  - experiment: default
+  - model: visual_hull
+  - experiment: null
+  - callbacks: default
 
 ckpt_path: null
+default_root_dir: checkpoints/
 
 task_name: "train"
 tags: ["dev"]

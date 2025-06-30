@@ -16,7 +16,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -25,7 +24,7 @@ USER_AGENT = (
 )
 
 CSV_FILE = "3d_pollen_library.csv"
-RAW_DIR = os.path.join(os.getcwd(), "raw")
+RAW_DIR = os.path.join(os.getcwd(), "raw", "base")
 os.makedirs(RAW_DIR, exist_ok=True)
 
 downloaded_meshes = {}

@@ -1,0 +1,16 @@
+# @package _global_
+data:
+  znear: 0.8
+  zfar: 1.8
+  fov: 51.98948897809546
+  category: cars
+  white_background: true
+  origin_distances: false
+
+model:
+  opacity_scale: 0.001
+  opacity_bias: -3.0
+  scale_scale: 0.001
+  scale_bias: 0.02
+  xyz_scale: 0.000001
+  xyz_bias: 0.0

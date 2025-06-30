@@ -3,105 +3,124 @@ import sys
 import os
 import logging
 import rootutils
-from collections import defaultdict
 from typing import Dict
+from omegaconf import DictConfig, OmegaConf
 import torch
 import lightning.pytorch as pl
-import lightning as L
-from omegaconf import DictConfig, OmegaConf
+from lightning.pytorch.loggers import WandbLogger
 from hydra.utils import instantiate
-from pytorch_lightning.loggers import WandbLogger
 import hydra
-import numpy as np
 
 from metrics import init_metrics
 
 sys.path.insert(0, os.getcwd())
 
-PROJECT_ROOT = rootutils.setup_root(
-    __file__, indicator=".project-root", pythonpath=True
-)
-
+PROJECT_ROOT = rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 CONFIG_ROOT = PROJECT_ROOT / "configs"
 
 logger = logging.getLogger(__name__)
 
-def train_fold(
-    cfg: DictConfig,
-    fold: int,
-    wandb_logger: WandbLogger
-) -> Dict[str, float]:
-    """
-    Run one fold: instantiate data, model, train, and return final metrics for that fold.
-    """
+
+def train_and_evaluate(cfg: DictConfig) -> Dict[str, float]:
+    """Run a single train–val–test cycle and return validation & test metrics."""
     if cfg.get("seed"):
         pl.seed_everything(cfg.seed, workers=True)
 
-    cfg.data.fold_idx = fold
+    # prepare data
     datamodule = instantiate(cfg.data)
     datamodule.setup("fit")
 
-    model = instantiate(cfg.model)
-    model.fold = fold
-    init_metrics(model, "train")
-    init_metrics(model, "val")
+    # instantiate model without the `frozen` key
+    tmp_model_cfg = OmegaConf.create(OmegaConf.to_container(cfg.model, resolve=True))
+    tmp_model_cfg.pop("frozen", None)
+    model: torch.nn.Module = instantiate(tmp_model_cfg)
 
-    trainer: pl.Trainer = instantiate(
-        cfg.trainer,
-        logger=wandb_logger,
-        callbacks=instantiate(cfg.get("callbacks")),
-    )
-    
-    trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
-    train_results = trainer.callback_metrics
+    # load pretrained weights if specified
+    if cfg.model.get("pretrained"):
+        ckpt_path = cfg.model.pretrained
+        # force full unpickling of the file (not just weights_only)
+        state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        model.load_state_dict(state, strict=False)
+        logger.info(f"Loaded pretrained weights from {ckpt_path}")
 
-    val_results = trainer.validate(model, datamodule=datamodule)[0]
+    # freeze any requested submodules
+    for submod_name in cfg.model.get("frozen", []):
+        submod = getattr(model, submod_name, None)
+        if submod is None:
+            logger.warning(f"Cannot freeze '{submod_name}': not found on model")
+            continue
+        for p in submod.parameters():
+            p.requires_grad = False
+        logger.info(f"Froze parameters in model.{submod_name}")
 
-    torch.cuda.empty_cache()
-    gc.collect()
-    
-    return val_results 
+    # initialize metrics
+    init_metrics("train", model)
+    init_metrics("val", model)
+    init_metrics("test", model)
 
-def run_cv(cfg: DictConfig) -> None:
+    # configure WandB
     flat_cfg = OmegaConf.to_container(cfg, resolve=True)
     wandb_logger = WandbLogger(
         project="reconstruction",
-        name=cfg.experiment.name,
+        name=cfg.name,
         config=flat_cfg,
         reinit=False,
     )
-    run = wandb_logger.experiment
-    run.define_metric("fold_*", step_metric="epoch")
 
-    metrics_across_folds: Dict[str, list[float]] = defaultdict(list)
+    # instantiate trainer
+    trainer: pl.Trainer = instantiate(
+        cfg.trainer,
+        logger=wandb_logger,
+        callbacks=instantiate_callbacks(cfg.get("callbacks")),
+    )
 
-    for fold in range(cfg.data.n_splits):
-        logger.info(f"Starting fold {fold}")
-        
-        fold_val_logs = train_fold(cfg, fold, wandb_logger)
-        
-        for key, value in fold_val_logs.items():
-            short = "/".join(key.split("/")[1:])
-            metrics_across_folds[short].append(value)
+    # training
+    trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
+    val_metrics = trainer.callback_metrics
 
-        logger.info(f"Fold {fold} metrics: {fold_val_logs}")
+    # testing
+    datamodule.setup("test")
+    test_metrics = trainer.test(model, datamodule=datamodule)[0]
 
-    summary: Dict[str, float] = {}
-    for metric_name, values in metrics_across_folds.items():
-        arr = np.array(values, dtype=float)
-        mean, std = arr.mean(), arr.std(ddof=1)
-        summary[f"{metric_name}_mean"] = mean
-        summary[f"{metric_name}_std"]  = std
-        
-        run.summary[f"{metric_name}_mean"] = mean
-        run.summary[f"{metric_name}_std"]  = std
+    # collect results
+    results = {**val_metrics, **{f"test/{k}": v for k, v in test_metrics.items()}}
 
-    logger.info(f"CV Summary: {summary}")
-    run.finish()
+    # cleanup
+    torch.cuda.empty_cache()
+    gc.collect()
+
+    # log final metrics to WandB and finish
+    for key, val in results.items():
+        wandb_logger.experiment.summary[key] = val
+    wandb_logger.experiment.finish()
+
+    return results
+
+
+def instantiate_callbacks(callbacks_cfg: DictConfig):
+    if not callbacks_cfg:
+        logger.warning("No callback configs found! Skipping..")
+        return []
+
+    if not isinstance(callbacks_cfg, DictConfig):
+        raise TypeError("Callbacks config must be a DictConfig!")
+
+    callbacks = []
+    for _, cb_conf in callbacks_cfg.items():
+        if isinstance(cb_conf, DictConfig) and "_target_" in cb_conf:
+            logger.info(f"Instantiating callback <{cb_conf._target_}>")
+            callbacks.append(instantiate(cb_conf))
+
+    return callbacks
+
 
 @hydra.main(config_path=str(CONFIG_ROOT), config_name="train", version_base="1.3")
 def main(cfg: DictConfig):
-    run_cv(cfg)
+    """Entry point launched by Hydra."""
+    metrics = train_and_evaluate(cfg)
+    logger.info("Final metrics (val + test): %s", metrics)
+    return metrics["val/loss"]
 
-if __name__ == "__main__":  
+
+if __name__ == "__main__":
     main()
