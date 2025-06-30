@@ -39,6 +39,7 @@ class EvalMetricsRunner:
     def extra_args(self, parser):
         parser.add_argument("--split", type=str, default="test", help="Split of data")
         parser.add_argument("--gen_meshes", action="store_true", help="Generate meshes", default=True)
+        parser.add_argument("--meshes_only", action="store_true", help="Generate only meshes, skip novel view synthesis", default=True)
         parser.add_argument("--mesh_thresh", type=float, help="Threshold")
         parser.add_argument("--find_best_mesh_thresh", action="store_true", default=True, help="Best mesh threshold")
         parser.add_argument("--gt_mesh_dir", type=str, default=r"C:\Users\super\Documents\Github\sequoia\data\processed\interim", help="Directory for GT meshes")  # <-- Add this line
@@ -241,7 +242,7 @@ class EvalMetricsRunner:
         total_objs = len(data_loader)
 
         best_mesh_thresh = None
-        mesh_thresh_candidates = [0.1, 0.15, 0.2, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+        mesh_thresh_candidates = [0.2]
 
         # --- Mesh threshold search: only ONCE for the whole test set ---
         if args.gen_meshes and args.find_best_mesh_thresh:
@@ -346,24 +347,248 @@ class EvalMetricsRunner:
                 images = data["images"][0]
                 NV, _, H, W = images.shape
 
-                if args.scale != 1.0:
-                    Ht = int(H * args.scale)
-                    Wt = int(W * args.scale)
-                    if (
-                        abs(Ht / args.scale - H) > 1e-10
-                        or abs(Wt / args.scale - W) > 1e-10
-                    ):
-                        warnings.warn(
-                            f"Inexact scaling: {args.scale} times ({H}, {W}) not integral"
-                        )
-                    H, W = Ht, Wt
+                # Skip novel view synthesis if meshes_only flag is set
+                if not args.meshes_only:
+                    if args.scale != 1.0:
+                        Ht = int(H * args.scale)
+                        Wt = int(W * args.scale)
+                        if (
+                            abs(Ht / args.scale - H) > 1e-10
+                            or abs(Wt / args.scale - W) > 1e-10
+                        ):
+                            warnings.warn(
+                                f"Inexact scaling: {args.scale} times ({H}, {W}) not integral"
+                            )
+                        H, W = Ht, Wt
 
-                if all_rays is None or use_source_lut or args.free_pose:
+                    if all_rays is None or use_source_lut or args.free_pose:
+                        if use_source_lut:
+                            obj_id = cat_name + "/" + obj_basename
+                            source = source_lut[obj_id]
+
+                        NS = len(source)
+                        src_view_mask = torch.zeros(NV, dtype=torch.bool)
+                        src_view_mask[source] = 1
+
+                        focal = data["focal"][0]
+                        if isinstance(focal, float):
+                            focal = torch.tensor(focal, dtype=torch.float32)
+                        focal = focal[None]
+
+                        c = data.get("c")
+                        if c is not None:
+                            c = c[0].to(device=device).unsqueeze(0)
+
+                        poses = data["poses"][0]
+                        src_poses = poses[src_view_mask].to(device=device)
+
+                        target_view_mask = target_view_mask_init.clone()
+                        if not args.include_src:
+                            target_view_mask *= ~src_view_mask
+                        novel_view_idxs = target_view_mask.nonzero(as_tuple=False).reshape(
+                            -1
+                        )
+                        poses = poses[target_view_mask]
+
+                        all_rays = (
+                            util.gen_rays(
+                                poses.reshape(-1, 4, 4),
+                                W,
+                                H,
+                                focal * args.scale,
+                                z_near,
+                                z_far,
+                                c=c * args.scale if c is not None else None,
+                            )
+                            .reshape(-1, 8)
+                            .to(device=device)
+                        )
+                        poses = None
+                        focal = focal.to(device=device)
+
+                    rays_spl = torch.split(all_rays, args.ray_batch_size, dim=0)
+                    n_gen_views = len(novel_view_idxs)
+
+                    net.encode(
+                        images[src_view_mask].to(device=device).unsqueeze(0),
+                        src_poses.unsqueeze(0),
+                        focal,
+                        c=c,
+                    )
+
+                    all_rgb, all_depth = [], []
+                    for rays in tqdm.tqdm(rays_spl):
+                        rgb, depth = render_par(rays[None])
+                        rgb = rgb[0].cpu()
+                        depth = depth[0].cpu()
+                        all_rgb.append(rgb)
+                        all_depth.append(depth)
+
+                    all_rgb = torch.cat(all_rgb, dim=0)
+                    all_depth = torch.cat(all_depth, dim=0)
+                    all_depth = (all_depth - z_near) / (z_far - z_near)
+                    all_depth = all_depth.reshape(n_gen_views, H, W).numpy()
+                    all_rgb = torch.clamp(
+                        all_rgb.reshape(n_gen_views, H, W, 3), 0.0, 1.0
+                    ).numpy()
+
+                    if has_output:
+                        obj_out_dir = os.path.join(output_dir, obj_name)
+                        os.makedirs(obj_out_dir, exist_ok=True)
+                        for i in range(n_gen_views):
+                            out_file = os.path.join(
+                                obj_out_dir, f"{novel_view_idxs[i].item():06}.png"
+                            )
+                            imageio.imwrite(out_file, (all_rgb[i] * 255).astype(np.uint8))
+                            if args.write_depth:
+                                out_depth_file = os.path.join(
+                                    obj_out_dir, f"{novel_view_idxs[i].item():06}_depth.exr"
+                                )
+                                out_depth_norm_file = os.path.join(
+                                    obj_out_dir,
+                                    f"{novel_view_idxs[i].item():06}_depth_norm.png",
+                                )
+                                depth_cmap_norm = util.cmap(all_depth[i])
+                                cv2.imwrite(out_depth_file, all_depth[i])
+                                imageio.imwrite(out_depth_norm_file, depth_cmap_norm)
+
+                        try:
+                            if args.gen_video:
+                                print("ZNear:", z_near)
+                                print("ZFar:", z_far)
+                                print("Focal:", focal)
+                                src_view = torch.tensor([0, 1], dtype=torch.long)
+                                num_views = 30
+                                radius = (z_near + z_far) * 0.5
+                                elevation = -10.0
+                                render_poses = torch.stack(
+                                    [
+                                        util.pose_spherical(angle, elevation, radius)
+                                        for angle in np.linspace(-180, 180, num_views + 1)[
+                                            :-1
+                                        ]
+                                    ],
+                                    0,
+                                ).to(device)
+                                render_rays = util.gen_rays(
+                                    render_poses,
+                                    W,
+                                    H,
+                                    focal * args.scale,
+                                    z_near,
+                                    z_far,
+                                    c=c * args.scale if c is not None else None,
+                                ).to(device)
+                                net.encode(
+                                    images[src_view].to(device).unsqueeze(0),
+                                    data["poses"][0][src_view].to(device).unsqueeze(0),
+                                    focal.to(device),
+                                    c=c,
+                                )
+                                all_rgb_novel = []
+                                for rays in tqdm.tqdm(
+                                    torch.split(
+                                        render_rays.view(-1, 8), args.ray_batch_size, dim=0
+                                    ),
+                                    desc="Novel 30-View",
+                                ):
+                                    rgb, _ = render_par(rays[None])
+                                    all_rgb_novel.append(rgb[0].cpu())
+                                rgb_fine_novel = torch.cat(all_rgb_novel)
+                                frames_novel = rgb_fine_novel.view(
+                                    num_views, H, W, 3
+                                ).numpy()
+                                video_path_novel = os.path.join(
+                                    obj_out_dir, f"{obj_name}_novel_views_30.mp4"
+                                )
+                                imageio.mimwrite(
+                                    video_path_novel,
+                                    (frames_novel * 255).astype(np.uint8),
+                                    fps=30,
+                                    quality=8,
+                                )
+                                print(
+                                    f"Novel-view-Video (30 Views, aus 2 Input-Views) gespeichert unter: {video_path_novel}"
+                                )
+                        except Exception as e:
+                            print(f"Fehler beim Erstellen des 30-View-Videos: {e}")
+
+                    curr_ssim = 0.0
+                    curr_psnr = 0.0
+                    if not args.no_compare_gt:
+                        images_0to1 = images * 0.5 + 0.5
+                        images_gt = images_0to1[target_view_mask]
+                        rgb_gt_all = images_gt.permute(0, 2, 3, 1).contiguous().numpy()
+                        for view_idx in range(n_gen_views):
+                            ssim = compare_ssim(
+                                all_rgb[view_idx],
+                                rgb_gt_all[view_idx],
+                                win_size=5,
+                                channel_axis=-1,
+                                data_range=1.0,
+                            )
+                            psnr = compare_psnr(
+                                all_rgb[view_idx], rgb_gt_all[view_idx], data_range=1
+                            )
+                            curr_ssim += ssim
+                            curr_psnr += psnr
+                            if args.write_compare and has_output:
+                                import matplotlib.pyplot as plt
+                                from matplotlib import gridspec
+
+                                fig = plt.figure(figsize=(8, 4))
+                                gs = gridspec.GridSpec(1, 2, width_ratios=[1, 1])
+
+                                titles = [
+                                    f"Predicted View (ID {novel_view_idxs[view_idx].item()})",
+                                    f"Ground Truth (ID {novel_view_idxs[view_idx].item()})"
+                                ]
+                                images_to_plot = [all_rgb[view_idx], rgb_gt_all[view_idx]]
+
+                                for i in range(2):
+                                    ax = plt.subplot(gs[i])
+                                    ax.imshow(images_to_plot[i])
+                                    ax.set_title(titles[i], fontsize=10)
+                                    ax.axis("off")
+
+                                fig.suptitle(f"Pollen ID: {obj_name}\nPSNR: {psnr:.2f}  SSIM: {ssim:.3f}", fontsize=12)
+                                plt.tight_layout(rect=[0, 0, 1, 0.88])  # leave space for suptitle
+
+                                compare_path = os.path.join(obj_out_dir, f"{novel_view_idxs[view_idx].item():06}_compare_labeled.png")
+                                plt.savefig(compare_path, dpi=300)
+                                plt.close(fig)
+
+                    curr_psnr /= n_gen_views
+                    curr_ssim /= n_gen_views
+                    curr_cnt = 1
+                    total_psnr += curr_psnr
+                    total_ssim += curr_ssim
+                    cnt += curr_cnt
+                    if not args.no_compare_gt:
+                        print(
+                            "curr psnr",
+                            curr_psnr,
+                            "ssim",
+                            curr_ssim,
+                            "running psnr",
+                            total_psnr / cnt,
+                            "running ssim",
+                            total_ssim / cnt,
+                        )
+                    if finish_file:
+                        finish_file.write(
+                            f"{obj_name} {curr_psnr} {curr_ssim} {curr_cnt}\n"
+                        )
+                else:
+                    # Meshes only mode - use the same encoding logic as the original path
+                    print(f"Meshes only mode - encoding network for {obj_name}")
+                    
+                    # Use the same source view selection logic as the original path
                     if use_source_lut:
                         obj_id = cat_name + "/" + obj_basename
                         source = source_lut[obj_id]
-
-                    NS = len(source)
+                    # If not using source_lut, source is already defined from earlier
+                    
                     src_view_mask = torch.zeros(NV, dtype=torch.bool)
                     src_view_mask[source] = 1
 
@@ -378,203 +603,13 @@ class EvalMetricsRunner:
 
                     poses = data["poses"][0]
                     src_poses = poses[src_view_mask].to(device=device)
-
-                    target_view_mask = target_view_mask_init.clone()
-                    if not args.include_src:
-                        target_view_mask *= ~src_view_mask
-                    novel_view_idxs = target_view_mask.nonzero(as_tuple=False).reshape(
-                        -1
-                    )
-                    poses = poses[target_view_mask]
-
-                    all_rays = (
-                        util.gen_rays(
-                            poses.reshape(-1, 4, 4),
-                            W,
-                            H,
-                            focal * args.scale,
-                            z_near,
-                            z_far,
-                            c=c * args.scale if c is not None else None,
-                        )
-                        .reshape(-1, 8)
-                        .to(device=device)
-                    )
-                    poses = None
-                    focal = focal.to(device=device)
-
-                rays_spl = torch.split(all_rays, args.ray_batch_size, dim=0)
-                n_gen_views = len(novel_view_idxs)
-
-                net.encode(
-                    images[src_view_mask].to(device=device).unsqueeze(0),
-                    src_poses.unsqueeze(0),
-                    focal,
-                    c=c,
-                )
-
-                all_rgb, all_depth = [], []
-                for rays in tqdm.tqdm(rays_spl):
-                    rgb, depth = render_par(rays[None])
-                    rgb = rgb[0].cpu()
-                    depth = depth[0].cpu()
-                    all_rgb.append(rgb)
-                    all_depth.append(depth)
-
-                all_rgb = torch.cat(all_rgb, dim=0)
-                all_depth = torch.cat(all_depth, dim=0)
-                all_depth = (all_depth - z_near) / (z_far - z_near)
-                all_depth = all_depth.reshape(n_gen_views, H, W).numpy()
-                all_rgb = torch.clamp(
-                    all_rgb.reshape(n_gen_views, H, W, 3), 0.0, 1.0
-                ).numpy()
-
-                if has_output:
-                    obj_out_dir = os.path.join(output_dir, obj_name)
-                    os.makedirs(obj_out_dir, exist_ok=True)
-                    for i in range(n_gen_views):
-                        out_file = os.path.join(
-                            obj_out_dir, f"{novel_view_idxs[i].item():06}.png"
-                        )
-                        imageio.imwrite(out_file, (all_rgb[i] * 255).astype(np.uint8))
-                        if args.write_depth:
-                            out_depth_file = os.path.join(
-                                obj_out_dir, f"{novel_view_idxs[i].item():06}_depth.exr"
-                            )
-                            out_depth_norm_file = os.path.join(
-                                obj_out_dir,
-                                f"{novel_view_idxs[i].item():06}_depth_norm.png",
-                            )
-                            depth_cmap_norm = util.cmap(all_depth[i])
-                            cv2.imwrite(out_depth_file, all_depth[i])
-                            imageio.imwrite(out_depth_norm_file, depth_cmap_norm)
-
-                    try:
-                        if args.gen_video:
-                            print("ZNear:", z_near)
-                            print("ZFar:", z_far)
-                            print("Focal:", focal)
-                            src_view = torch.tensor([0, 1], dtype=torch.long)
-                            num_views = 30
-                            radius = (z_near + z_far) * 0.5
-                            elevation = -10.0
-                            render_poses = torch.stack(
-                                [
-                                    util.pose_spherical(angle, elevation, radius)
-                                    for angle in np.linspace(-180, 180, num_views + 1)[
-                                        :-1
-                                    ]
-                                ],
-                                0,
-                            ).to(device)
-                            render_rays = util.gen_rays(
-                                render_poses,
-                                W,
-                                H,
-                                focal * args.scale,
-                                z_near,
-                                z_far,
-                                c=c * args.scale if c is not None else None,
-                            ).to(device)
-                            net.encode(
-                                images[src_view].to(device).unsqueeze(0),
-                                data["poses"][0][src_view].to(device).unsqueeze(0),
-                                focal.to(device),
-                                c=c,
-                            )
-                            all_rgb_novel = []
-                            for rays in tqdm.tqdm(
-                                torch.split(
-                                    render_rays.view(-1, 8), args.ray_batch_size, dim=0
-                                ),
-                                desc="Novel 30-View",
-                            ):
-                                rgb, _ = render_par(rays[None])
-                                all_rgb_novel.append(rgb[0].cpu())
-                            rgb_fine_novel = torch.cat(all_rgb_novel)
-                            frames_novel = rgb_fine_novel.view(
-                                num_views, H, W, 3
-                            ).numpy()
-                            video_path_novel = os.path.join(
-                                obj_out_dir, f"{obj_name}_novel_views_30.mp4"
-                            )
-                            imageio.mimwrite(
-                                video_path_novel,
-                                (frames_novel * 255).astype(np.uint8),
-                                fps=30,
-                                quality=8,
-                            )
-                            print(
-                                f"Novel-view-Video (30 Views, aus 2 Input-Views) gespeichert unter: {video_path_novel}"
-                            )
-                    except Exception as e:
-                        print(f"Fehler beim Erstellen des 30-View-Videos: {e}")
-
-                curr_ssim = 0.0
-                curr_psnr = 0.0
-                if not args.no_compare_gt:
-                    images_0to1 = images * 0.5 + 0.5
-                    images_gt = images_0to1[target_view_mask]
-                    rgb_gt_all = images_gt.permute(0, 2, 3, 1).contiguous().numpy()
-                    for view_idx in range(n_gen_views):
-                        ssim = compare_ssim(
-                            all_rgb[view_idx],
-                            rgb_gt_all[view_idx],
-                            win_size=5,
-                            channel_axis=-1,
-                            data_range=1.0,
-                        )
-                        psnr = compare_psnr(
-                            all_rgb[view_idx], rgb_gt_all[view_idx], data_range=1
-                        )
-                        curr_ssim += ssim
-                        curr_psnr += psnr
-                        if args.write_compare and has_output:
-                            import matplotlib.pyplot as plt
-                            from matplotlib import gridspec
-
-                            fig = plt.figure(figsize=(8, 4))
-                            gs = gridspec.GridSpec(1, 2, width_ratios=[1, 1])
-
-                            titles = [
-                                f"Predicted View (ID {novel_view_idxs[view_idx].item()})",
-                                f"Ground Truth (ID {novel_view_idxs[view_idx].item()})"
-                            ]
-                            images_to_plot = [all_rgb[view_idx], rgb_gt_all[view_idx]]
-
-                            for i in range(2):
-                                ax = plt.subplot(gs[i])
-                                ax.imshow(images_to_plot[i])
-                                ax.set_title(titles[i], fontsize=10)
-                                ax.axis("off")
-
-                            fig.suptitle(f"Pollen ID: {obj_name}\nPSNR: {psnr:.2f}  SSIM: {ssim:.3f}", fontsize=12)
-                            plt.tight_layout(rect=[0, 0, 1, 0.88])  # leave space for suptitle
-
-                            compare_path = os.path.join(obj_out_dir, f"{novel_view_idxs[view_idx].item():06}_compare_labeled.png")
-                            plt.savefig(compare_path, dpi=300)
-                            plt.close(fig)
-
-                curr_psnr /= n_gen_views
-                curr_ssim /= n_gen_views
-                curr_cnt = 1
-                total_psnr += curr_psnr
-                total_ssim += curr_ssim
-                cnt += curr_cnt
-                if not args.no_compare_gt:
-                    print(
-                        "curr psnr",
-                        curr_psnr,
-                        "ssim",
-                        curr_ssim,
-                        "running psnr",
-                        total_psnr / cnt,
-                        "running ssim",
-                        total_ssim / cnt,
-                    )
-                if finish_file:
-                    finish_file.write(
-                        f"{obj_name} {curr_psnr} {curr_ssim} {curr_cnt}\n"
+                    
+                    # Use the same encoding as the original path
+                    net.encode(
+                        images[src_view_mask].to(device=device).unsqueeze(0),
+                        src_poses.unsqueeze(0),
+                        focal.to(device),
+                        c=c,
                     )
 
                 if args.gen_meshes:

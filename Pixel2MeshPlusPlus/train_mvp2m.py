@@ -59,7 +59,7 @@ def main(cfg):
             tf.placeholder(tf.float32, shape=(43, 43)) for _ in range(num_supports)
         ],
     }
-    placeholders["num_input_images"] = cfg.num_input_images  # ✅ Add this line
+    placeholders["num_input_images"] = cfg.num_input_images
 
 
     root_dir = os.path.join(cfg.save_path, cfg.name)
