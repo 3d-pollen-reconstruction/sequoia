@@ -3,7 +3,7 @@ is_debug: false
 feat_dim: 2883
 # 3 + 3*(16+32+64)
 stage2_feat_dim: 339
-name: 'refine_p2mpp_augmentation_2_inputs_freeze'
+name: 'refine_p2mpp_augmentation_2_inputs_freezed'
 save_path: 'results'
 # about cnn
 load_cnn: yes
