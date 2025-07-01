@@ -1,0 +1,19 @@
+_target_: data.holo_dataset.HolographicPolenoDataModule
+
+image_transforms:
+  _target_: torchvision.transforms.Compose
+  transforms:
+    - _target_: torchvision.transforms.Resize
+      size: [224, 224]
+
+    - _target_: data.holo_dataset.RemoveRipples
+      method: otsu
+      blur_ksize: 5
+      adaptive_blocksize: 51
+      adaptive_C: 2
+      morph_ksize: 5
+
+    - _target_: torchvision.transforms.ToTensor
+
+batch_size: 8
+num_workers: 4

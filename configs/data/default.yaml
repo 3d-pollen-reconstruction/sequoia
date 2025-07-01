@@ -4,7 +4,7 @@ image_transforms:
   _target_: torchvision.transforms.Compose
   transforms:
     - _target_: torchvision.transforms.Resize
-      size: [128, 128]
+      size: [224, 224]
     - _target_: torchvision.transforms.ToTensor
 
 n_images: 2
