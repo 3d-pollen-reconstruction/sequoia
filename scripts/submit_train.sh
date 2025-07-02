@@ -29,3 +29,11 @@ BIND_OPTS="--bind ${SLURM_SUBMIT_DIR}:/workspace"
 
 EXP_NAME="$1"; shift
 OVERRIDES="$@"
+
+cd "${SLURM_SUBMIT_DIR}"
+singularity exec --nv \
+  ${BIND_OPTS} \
+  ${SIF_PATH} \
+  uv run python /workspace/core/train.py \
+    experiment="${EXP_NAME}" \
+    ${OVERRIDES}

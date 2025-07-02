@@ -156,8 +156,8 @@ def predict_and_export(cfg: DictConfig) -> None:
     with torch.no_grad():
         for idx, batch in enumerate(loader):
             if len(batch) == 3:
-                # default dataset: (views, rotations, stems)
-                views, rotations, stems = batch
+                views, rotations, _ = batch
+                stems = dataset.stems[idx]
             elif len(batch) == 2:
                 # holo dataset: ((img0,img1), label)
                 views, label = batch
@@ -201,7 +201,7 @@ def predict_and_export(cfg: DictConfig) -> None:
             except ValueError:
                 logger.warning("Sample '%s' produced an empty mesh – skipped.", stem)
                 continue
-
+            logger.info(f"Trying to write mesh {stem}.stl")
             mesh.export(os.path.join(out_dir, f"{stem}.stl"))
             logger.info("%s.stl written", stem)
 
