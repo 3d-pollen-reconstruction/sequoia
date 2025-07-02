@@ -115,10 +115,10 @@ class MeshEvaluator:
 
             # 3. Normalize & convex hull
             try:
-                mesh_pred_hull = mesh_pred_aligned.convex_hull
+                mesh_pred_hull = mesh_pred_aligned
             except Exception:
                 mesh_pred_hull = mesh_pred_aligned  # fallback
-            mesh_gt_hull = MeshUtils.normalize_mesh(mesh_gt.copy()).convex_hull
+            mesh_gt_hull = MeshUtils.normalize_mesh(mesh_gt.copy())
             metric_bar.update(1)
 
             # 4. Sample surface points

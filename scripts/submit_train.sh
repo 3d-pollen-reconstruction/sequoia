@@ -34,6 +34,7 @@ cd "${SLURM_SUBMIT_DIR}"
 singularity exec --nv \
   ${BIND_OPTS} \
   ${SIF_PATH} \
+  HYDRA_FULL_ERROR=1 \
   uv run python /workspace/core/train.py \
     experiment="${EXP_NAME}" \
     ${OVERRIDES}
