@@ -1,4 +1,4 @@
-_target_: data.datamodule.PollenDataModule
+_target_: data.PollenDataModule
 
 image_transforms:
   _target_: torchvision.transforms.Compose

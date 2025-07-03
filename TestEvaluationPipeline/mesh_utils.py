@@ -20,6 +20,21 @@ class MeshUtils:
         if recall + precision == 0:
             return 0.0
         return 2 * recall * precision / (recall + precision)
+    
+    @staticmethod
+    def fscore_multi(d1, d2, thresholds):
+        """
+        Same F-score definition as `fscore`, but re-uses the
+        already-computed point–point distances for several thresholds.
+        Returns a list with the same order as `thresholds`.
+        """
+        out = []
+        for th in thresholds:
+            recall    = (d1 < th).mean()
+            precision = (d2 < th).mean()
+            f = 0.0 if (recall + precision) == 0 else 2 * recall * precision / (recall + precision)
+            out.append(f)
+        return out
 
     @staticmethod
     def chamfer_distance(pts_pred, pts_gt):
@@ -139,80 +154,63 @@ class MeshUtils:
             return np.nan
 
     @staticmethod
-    def align_icp(
-        mesh_source: trimesh.Trimesh,
-        mesh_target: trimesh.Trimesh,
-        n_points: int = 20_000,
-        voxel_size: float = 0.01,
-        max_iter=(60, 40, 20),          # coarse ➜ fine
-        distance_factor: float = 2.0,
-        robust_kernel=o3d.pipelines.registration.TukeyLoss(k=0.05),
-    ):
+    def align_icp(mesh_source, mesh_target, n_points=5000, max_iterations=10000, threshold=0.05):
         """
-        Coarse-to-fine registration:
-        1.  Normalize meshes (center + isotropic scale).
-        2.  Down-sample & estimate normals.
-        3.  Fast global registration (FPFH + RANSAC) for an initial pose.
-        4.  Multi-scale Generalized ICP with robust loss.
-        Returns the aligned mesh, sampled aligned points and the 4×4 transform.
+        Align mesh_source to mesh_target using Open3D ICP (point-to-plane).
+        Returns:
+            - mesh_aligned: transformed mesh_source
+            - pts_src_aligned: transformed sampled source points
         """
-        def norm_mesh(m):
-            m = copy.deepcopy(m)
-            m.vertices -= m.vertices.mean(0)
-            span = np.linalg.norm(m.vertices.ptp(0))
-            m.vertices /= span
-            return m
+        src = mesh_source.copy()
+        tgt = mesh_target.copy()
 
-        src, tgt = norm_mesh(mesh_source), norm_mesh(mesh_target)
+        # Normalize both meshes: center + scale to unit box
+        def normalize_mesh_inplace(mesh):
+            mesh.vertices -= mesh.vertices.mean(axis=0)
+            scale = np.linalg.norm(mesh.vertices.max(axis=0) - mesh.vertices.min(axis=0))
+            if scale > 0:
+                mesh.vertices /= scale
+            return mesh
 
-        # --- sampling & down-sampling ------------------------------------------------
-        def to_pcd(m):
-            pcd = o3d.geometry.PointCloud()
-            pts, _ = trimesh.sample.sample_surface(m, n_points)
-            pcd.points = o3d.utility.Vector3dVector(pts)
-            pcd.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=voxel_size*2, max_nn=30))
-            return pcd
+        normalize_mesh_inplace(src)
+        normalize_mesh_inplace(tgt)
 
-        pcd_src = to_pcd(src).voxel_down_sample(voxel_size)
-        pcd_tgt = to_pcd(tgt).voxel_down_sample(voxel_size)
-        radius_feature = voxel_size*5
+        # Sample points
+        pts_src, _ = trimesh.sample.sample_surface(src, n_points)
+        pts_tgt, _ = trimesh.sample.sample_surface(tgt, n_points)
 
-        # --- 1. Fast global registration (FPFH-RANSAC) ------------------------------
-        pcd_src_fpfh = o3d.pipelines.registration.compute_fpfh_feature(
-            pcd_src,
-            o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
-        pcd_tgt_fpfh = o3d.pipelines.registration.compute_fpfh_feature(
-            pcd_tgt,
-            o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
+        # Convert to Open3D point clouds
+        pcd_src = o3d.geometry.PointCloud()
+        pcd_src.points = o3d.utility.Vector3dVector(pts_src)
+        pcd_src.estimate_normals()
 
-        result_ransac = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
-            pcd_src, pcd_tgt, pcd_src_fpfh, pcd_tgt_fpfh,
-            mutual_filter=True, max_correspondence_distance=voxel_size*distance_factor,
-            estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
-            ransac_n=4,
-            checkers=[
-                o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
-                o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(voxel_size*distance_factor)
-            ],
-            criteria=o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 0.999))
+        pcd_tgt = o3d.geometry.PointCloud()
+        pcd_tgt.points = o3d.utility.Vector3dVector(pts_tgt)
+        pcd_tgt.estimate_normals()
 
-        trans = result_ransac.transformation
+        # Run ICP
+        try:
+            reg = o3d.pipelines.registration.registration_icp(
+                pcd_src, pcd_tgt, threshold, np.eye(4),
+                o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+                o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=max_iterations)
+            )
 
-        # --- 2. Multi-scale Generalized ICP refinement ------------------------------
-        for stage, it in enumerate(max_iter):
-            dist = voxel_size * (2.0 / (stage+1))
-            gicp = o3d.pipelines.registration.registration_generalized_icp(
-                pcd_src, pcd_tgt, dist, trans,
-                o3d.pipelines.registration.TransformationEstimationForGeneralizedICP(robust_kernel),
-                o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=it))
-            trans = gicp.transformation
+            if reg.fitness < 1e-4:
+                print(f"[WARNING] ICP failed: very low fitness. No alignment applied.")
+                reg_trans = np.eye(4)
+            else:
+                reg_trans = reg.transformation
 
-        # --- apply transform ---------------------------------------------------------
+        except Exception as e:
+            print(f"[ERROR] ICP failed due to exception: {e}")
+            reg_trans = np.eye(4)
+
+        # Apply transformation to mesh and points
         mesh_aligned = src.copy()
-        mesh_aligned.apply_transform(trans)
-        pts_src, _ = trimesh.sample.sample_surface(mesh_source, n_points)
-        pts_src_h = np.c_[pts_src, np.ones(len(pts_src))]
-        pts_src_aligned = (trans @ pts_src_h.T).T[:, :3]
+        mesh_aligned.apply_transform(reg_trans)
 
-        return mesh_aligned, pts_src_aligned, trans
+        pts_src_homo = np.hstack([pts_src, np.ones((pts_src.shape[0], 1))])
+        pts_src_aligned = (reg_trans @ pts_src_homo.T).T[:, :3]
 
+        return mesh_aligned, pts_src_aligned

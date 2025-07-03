@@ -87,6 +87,8 @@ class MeshEvaluator:
             self.results = []
 
     def evaluate_mesh(self, pred_mesh_path, gt_mesh_path, fscore_thresh=0.01):
+        thresholds = [0.01, 0.025, 0.05]
+        
         metric_names = [
             "Load meshes",
             "ICP alignment",
@@ -94,7 +96,7 @@ class MeshEvaluator:
             "Sample surface points",
             "Chamfer distance",
             "Hausdorff distance",
-            "F-score",
+            "F-score (1%/5%/10%)"
             "Volume difference",
             "Surface area difference",
             "Edge length stats",
@@ -114,10 +116,7 @@ class MeshEvaluator:
             metric_bar.update(1)
 
             # 3. Normalize & convex hull
-            try:
-                mesh_pred_hull = mesh_pred_aligned
-            except Exception:
-                mesh_pred_hull = mesh_pred_aligned  # fallback
+            mesh_pred_hull = mesh_pred_aligned
             mesh_gt_hull = MeshUtils.normalize_mesh(mesh_gt.copy())
             metric_bar.update(1)
 
@@ -135,8 +134,11 @@ class MeshEvaluator:
             hausdorff = MeshUtils.hausdorff_distance(pts_pred, pts_gt)
             metric_bar.update(1)
 
-            # 7. F-score
-            fscore = MeshUtils.fscore(pts_pred, pts_gt, threshold=fscore_thresh)
+            # 7. F-scores
+            # Pair-wise distances only once
+            d1 = np.min(np.linalg.norm(pts_pred[:, None] - pts_gt[None], axis=-1), axis=1)
+            d2 = np.min(np.linalg.norm(pts_gt[:, None] - pts_pred[None], axis=-1), axis=1)
+            fscore_1, fscore_2_5, fscore_5 = MeshUtils.fscore_multi(d1, d2, thresholds)
             metric_bar.update(1)
 
             # 8. Volume difference
@@ -180,11 +182,26 @@ class MeshEvaluator:
             metric_bar.update(1)
 
             results = (
-                chamfer, hausdorff, fscore, mesh_pred_hull, mesh_gt_hull,
-                vol_diff, area_diff,
-                edge_mean_pred, edge_std_pred, edge_mean_gt, edge_std_gt,
-                voxel_iou, euler_pred, euler_gt, normal_consistency, None
+                chamfer, 
+                hausdorff, 
+                fscore_1,
+                fscore_2_5,
+                fscore_5,
+                mesh_pred_hull, 
+                mesh_gt_hull,
+                vol_diff, 
+                area_diff,
+                edge_mean_pred, 
+                edge_std_pred, 
+                edge_mean_gt, 
+                edge_std_gt,
+                voxel_iou, 
+                euler_pred, 
+                euler_gt, 
+                normal_consistency,
+                None
             )
+            
         return results
 
 
@@ -327,7 +344,7 @@ class MeshEvaluator:
                         }
                     else:
                         (
-                            chamfer, hausdorff, fscore, mesh_pred_hull, mesh_gt_hull,
+                            chamfer, hausdorff, f1, f2_5, f5, mesh_pred_hull, mesh_gt_hull,
                             vol_diff, area_diff,
                             edge_mean_pred, edge_std_pred, edge_mean_gt, edge_std_gt,
                             voxel_iou, euler_pred, euler_gt, normal_consistency, voxel_plot_path
@@ -352,7 +369,9 @@ class MeshEvaluator:
                             "gt_path": gt_mesh_path,
                             "chamfer": chamfer,
                             "hausdorff": hausdorff,
-                            "fscore": fscore,
+                            "fscore_1": f1,
+                            "fscore_2_5": f2_5,
+                            "fscore_5": f5,
                             "augmented": use_augmented,
                             "plot_path": plot_path,
                             "compare_path": compare_path,
@@ -368,7 +387,8 @@ class MeshEvaluator:
                             "normal_consistency": normal_consistency,
                             "voxel_plot_path": voxel_plot_path
                         }
-                    tqdm.write(f"{model_name}/{fname}: {result['chamfer']}, {result['hausdorff']}, {result['fscore']}")
+                    tqdm.write(f"{model_name}/{fname}: chamfer={chamfer:.4g}, "
+                               f"haus={hausdorff:.4g}, F1={f1:.3f}, F2.5={f2_5:.3f}, F5={f5:.3f}")
                     self.results.append(result)
                     self.done_set.add(pred_mesh_path)
                     self.save_results(incremental=True)
