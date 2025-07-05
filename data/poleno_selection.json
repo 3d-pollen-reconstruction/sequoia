@@ -1,0 +1,37 @@
+{
+    "g_carpinus_s_betulus": [
+        "poleno-27_2023-04-06_18.06.28.175254_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-27_2023-04-06_18.06.28.401254_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-27_2023-04-06_18.06.28.963254_ev.computed_data.holography.image_pairs.0.0.rec_mag"
+    ],
+    "g_fagus_s_sylvatica": [
+        "poleno-22_2023-05-04_13.20.25.490385_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-22_2023-05-04_13.20.25.568385_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-22_2023-05-04_13.20.28.024384_ev.computed_data.holography.image_pairs.0.0.rec_mag"
+    ],
+    "g_olea_s_europaea": [
+        "poleno-15_2023-04-06_13.19.30.089087_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-15_2023-04-06_13.19.30.213087_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-15_2023-04-06_13.19.30.465087_ev.computed_data.holography.image_pairs.0.0.rec_mag"
+    ],
+    "g_parietaria_s_officinalis": [
+        "poleno-14_2022-09-07_12.08.31.154529_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-14_2022-09-07_12.08.31.693529_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-14_2022-09-07_12.08.31.792529_ev.computed_data.holography.image_pairs.0.0.rec_mag"
+    ],
+    "g_picea_s_abies": [
+        "poleno-2_2023-05-05_08.09.08.621796_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-2_2023-05-05_08.09.07.396796_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-2_2023-05-05_08.09.07.572796_ev.computed_data.holography.image_pairs.0.0.rec_mag"
+    ],
+    "g_rumex_s_acetosella": [
+        "poleno-2_2023-05-05_10.14.49.092481_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-2_2023-05-05_10.14.49.372481_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-2_2023-05-05_10.14.49.480481_ev.computed_data.holography.image_pairs.0.0.rec_mag"
+    ],
+    "g_urtica_s_dioica": [
+        "poleno-14_2022-09-07_12.08.31.693529_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-14_2022-09-07_12.08.31.792529_ev.computed_data.holography.image_pairs.0.0.rec_mag",
+        "poleno-14_2022-09-07_12.08.31.947529_ev.computed_data.holography.image_pairs.0.0.rec_mag"
+    ]
+}

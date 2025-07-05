@@ -71,7 +71,7 @@ class EvalMetricsRunner:
         parser.add_argument("--split", type=str, default="test", help="Split of data")
         parser.add_argument("--gen_meshes", action="store_true", help="Generate meshes")
         parser.add_argument("--mesh_thresh", type=float, default=10.0, help="Threshold")
-        parser.add_argument("--source", "-P", type=str, default="64", help="Source view(s)")
+        parser.add_argument("--source", "-P", type=str, default="0 1", help="Source view(s)")
         parser.add_argument("--eval_view_list", type=str, default=None, help="Path to eval view list")
         parser.add_argument("--coarse", action="store_true", help="Coarse network as fine")
         parser.add_argument("--no_compare_gt", action="store_true", help="Skip GT comparison")
@@ -127,12 +127,12 @@ class EvalMetricsRunner:
 
     def run(self):
         args, conf = util.args.parse_args(
-            self.extra_args, default_conf="conf/exp/pollen.conf", default_expname="pollen",
+            self.extra_args, default_conf="conf/exp/pollen.conf", default_expname="pollen_4_4",
         )
         args.resume = True
         device = util.get_cuda(args.gpu_id[0])
         dset = get_split_dataset(
-            args.dataset_format, args.datadir, want_split=args.split, training=False
+            args.dataset_format, args.datadir, want_split=args.split, training=False, image_size=[conf["model"]["img_sidelength"],conf["model"]["img_sidelength"]]
         )
         data_loader = torch.utils.data.DataLoader(
             dset, batch_size=1, shuffle=False, num_workers=8, pin_memory=False

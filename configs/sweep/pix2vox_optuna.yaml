@@ -1,0 +1,25 @@
+# @package _global_
+
+defaults:
+  - experiment: pix2vox_aug        
+  - override /hydra/launcher: slurm
+  - override /hydra/sweeper: optuna
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    direction: minimize
+    study_name: pix2vox_optuna
+    storage: sqlite:///optuna.db
+    n_trials: 50
+    n_jobs: 1
+    sampler:
+      _target_: optuna.samplers.TPESampler
+      seed: 123
+    pruner:
+      _target_: optuna.pruners.MedianPruner
+      n_warmup_steps: 5
+    params:
+      model.lr: float(log, 1e-5, 1e-3)
+      model.merger_kickin: int(0, 100)
+      model.refiner_kickin: int(50, 150)

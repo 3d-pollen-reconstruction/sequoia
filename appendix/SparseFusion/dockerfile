@@ -1,0 +1,110 @@
+FROM nvidia/cuda:11.3.1-cudnn8-devel-ubuntu20.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CONDA_DIR=/opt/conda
+ENV PATH=$CONDA_DIR/bin:$PATH
+ENV CUDA_HOME=/usr/local/cuda
+ENV TORCH_CUDA_ARCH_LIST="7.5"
+ENV PATH=${CUDA_HOME}/bin:$PATH
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    git \
+    curl \
+    ca-certificates \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1-mesa-glx \
+    libglib2.0-dev \
+    libgl1-mesa-dev \
+    libglfw3-dev \
+    libglew-dev \
+    libomp-dev \
+    ninja-build \
+    build-essential \
+    python3-dev \
+    libcrypt-dev \
+    libpthread-stubs0-dev \
+    libc6-dev \
+    #nvidia-cuda-toolkit \
+    && rm -rf /var/lib/apt/lists/*
+
+# Symlink pthread manually (fallback for bad linker paths)
+RUN mkdir -p /lib64 /usr/lib64 && \
+    ln -sf /lib/x86_64-linux-gnu/libpthread.so.0   /lib64/libpthread.so.0 && \
+    ln -sf /usr/lib/x86_64-linux-gnu/libpthread_nonshared.a /usr/lib64/libpthread_nonshared.a
+
+# Install Miniconda
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
+    mkdir -p $CONDA_DIR && \
+    bash /tmp/miniconda.sh -b -u -p $CONDA_DIR && \
+    rm /tmp/miniconda.sh && \
+    $CONDA_DIR/bin/conda clean -afy
+
+# Create and activate conda environment
+RUN conda create -n sparsefusion python=3.8 -y
+SHELL ["/bin/bash", "-c"]
+RUN echo "conda activate sparsefusion" >> ~/.bashrc
+ENV PATH /opt/conda/envs/sparsefusion/bin:$PATH
+
+# Ensure crypt.h is findable
+RUN mkdir -p /opt/conda/envs/sparsefusion/include && \
+    ln -sf /usr/include/crypt.h /opt/conda/envs/sparsefusion/include/crypt.h
+
+# Install conda dependencies
+RUN conda install -n sparsefusion -c conda-forge cudatoolkit-dev ninja -y && \
+    conda install -n sparsefusion pytorch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0 cudatoolkit=11.3 -c pytorch -y && \
+    conda install -n sparsefusion -c fvcore -c iopath -c conda-forge fvcore iopath -y && \
+    conda install -n sparsefusion -c pytorch3d pytorch3d -y
+
+# Upgrade setuptools to avoid deprecated warning (for pysdf and others)
+RUN pip install --upgrade setuptools
+
+# Install pip dependencies
+RUN pip install transformers==4.19.2 pytorch-lightning==1.4.2 torchmetrics==0.6.0 && \
+    pip install -e git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers
+
+# Clone and install CO3D (optional)
+RUN git clone https://github.com/facebookresearch/co3d.git && \
+    cd co3d && \
+    pip install -r requirements.txt && \
+    pip install -e .
+
+# Clone SparseFusion repository
+RUN git clone https://github.com/3d-pollen-reconstruction/sequoia.git && \
+    cd sequoia && \
+    git checkout dev && \
+    cd SparseFusion && \
+    pip install pybind11 && \
+    CC=/usr/bin/gcc CXX=/usr/bin/g++ \
+    CPLUS_INCLUDE_PATH=${CPLUS_INCLUDE_PATH}:/opt/conda/envs/sparsefusion/include \
+    pip install -r requirements.txt
+
+RUN echo $PATH && \
+    which nvcc && \
+    nvcc --version
+
+# Find the real CUDA directory and link nvcc there
+RUN CUDA_REAL=$(readlink -f /usr/local/cuda) && \
+    mkdir -p $CUDA_REAL/bin && \
+    ln -sf $(which nvcc) $CUDA_REAL/bin/nvcc && \
+    echo "Symlink created in $CUDA_REAL/bin"
+# ...rest of the code...
+    
+RUN mkdir -p /usr/local/cuda/bin && \
+    ln -sf $(which nvcc) /usr/local/cuda/bin/nvcc && \
+    echo "Created symlink: $(ls -la /usr/local/cuda/bin/nvcc)" && \
+    cd /sequoia/SparseFusion/external/gridencoder && \
+    CUDA_HOME=/opt/conda/envs/sparsefusion python setup.py install && \
+    cd /sequoia/SparseFusion/raymarching && \
+    CUDA_HOME=/opt/conda/envs/sparsefusion python setup.py install
+
+# Set working directory
+WORKDIR /sequoia/SparseFusion
+
+# Default command
+CMD ["/bin/bash"]

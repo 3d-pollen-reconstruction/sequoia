@@ -1,15 +1,13 @@
-_target_: data.datamodule.PollenDataModule
+_target_: data.PollenDataModule
 
 image_transforms:
   _target_: torchvision.transforms.Compose
   transforms:
     - _target_: torchvision.transforms.Resize
-      size: [128, 128]
+      size: [224, 224]
     - _target_: torchvision.transforms.ToTensor
 
-mesh_transforms: null
+n_images: 2
 batch_size: 8
-n_splits: 5
-fold_idx: 0
 num_workers: 4
-seed: 1337
+include_augmentations: false

@@ -1,2 +1,6 @@
+# @package _global_
+
+defaults:
+  - override /model: pix2vox
+
 name: default
-model: visual_hull

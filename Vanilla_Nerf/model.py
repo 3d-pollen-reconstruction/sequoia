@@ -41,48 +41,117 @@ class Nerf(nn.Module):
     def __init__(self, Lpos=10, Ldir=4, hidden_dim=256):
         super(Nerf, self).__init__()
         
-        self.block1 = nn.Sequential(nn.Linear(Lpos * 6 + 3, hidden_dim), nn.ReLU(),
-                                    nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
-                                    nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
-                                    nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
-                                    nn.Linear(hidden_dim, hidden_dim), nn.ReLU())
+        # REDUCE positional encoding frequencies to prevent exploding gradients
+        self.Lpos = min(Lpos, 8)  # Cap at 8 instead of 10
+        self.Ldir = min(Ldir, 3)  # Cap at 3 instead of 4
         
-        self.block2 = nn.Sequential(nn.Linear(hidden_dim + Lpos * 6 + 3, hidden_dim), nn.ReLU(),
-                                    nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
-                                    nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
-                                    nn.Linear(hidden_dim, hidden_dim + 1),)
+        pos_input_dim = self.Lpos * 6 + 3
+        dir_input_dim = self.Ldir * 6 + 3
         
-        self.rgb_head = nn.Sequential(nn.Linear(hidden_dim + Ldir * 6 + 3, hidden_dim // 2), nn.ReLU(),
-                                      nn.Linear(hidden_dim // 2, 3), nn.Sigmoid())
+        # First block with better initialization
+        self.block1 = nn.Sequential(
+            nn.Linear(pos_input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
+        )
         
-        self.Lpos = Lpos
-        self.Ldir = Ldir
+        # Second block with skip connection
+        self.block2 = nn.Sequential(
+            nn.Linear(hidden_dim + pos_input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim + 1)  # +1 for density
+        )
+        
+        # RGB head
+        self.rgb_head = nn.Sequential(
+            nn.Linear(hidden_dim + dir_input_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, 3),
+            nn.Sigmoid()
+        )
+        
+        # CRITICAL: Initialize weights properly
+        self._initialize_weights()
+        
+    def _initialize_weights(self):
+        """Initialize weights to prevent collapse"""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                # Use smaller initialization for stability
+                nn.init.xavier_uniform_(m.weight, gain=0.5)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+                    
+        # Special initialization for density layer (last layer of block2)
+        with torch.no_grad():
+            final_layer = self.block2[-1]
+            # Initialize density bias to small positive value
+            final_layer.bias[-1] = 0.1
+            # Initialize density weights smaller
+            final_layer.weight[-1, :] *= 0.1
         
     def positional_encoding(self, x, L):
+        """Improved positional encoding with frequency clamping"""
         out = [x]
         for j in range(L):
-            out.append(torch.sin(2 ** j * x))
-            out.append(torch.cos(2 ** j * x))
-        return torch.cat(out, dim=1)
+            freq = 2.0 ** j
+            # Clamp frequencies to prevent explosion
+            freq = min(freq, 512.0)  # Cap maximum frequency
             
-                                    
+            sin_comp = torch.sin(freq * x)
+            cos_comp = torch.cos(freq * x)
+            
+            # Clamp to prevent NaN/Inf
+            sin_comp = torch.clamp(sin_comp, -1.0, 1.0)
+            cos_comp = torch.clamp(cos_comp, -1.0, 1.0)
+            
+            out.append(sin_comp)
+            out.append(cos_comp)
+            
+        return torch.cat(out, dim=1)
         
     def forward(self, xyz, d):
+        # Clamp inputs to reasonable range
+        xyz = torch.clamp(xyz, -5.0, 5.0)
+        d = F.normalize(d, dim=-1)  # Ensure directions are normalized
         
-        x_emb = self.positional_encoding(xyz, self.Lpos) # [batch_size, Lpos * 6 + 3]
-        d_emb = self.positional_encoding(d, self.Ldir) # [batch_size, Ldir * 6 + 3]
+        # Positional encoding
+        x_emb = self.positional_encoding(xyz, self.Lpos)
+        d_emb = self.positional_encoding(d, self.Ldir)
         
-        h = self.block1(x_emb) # [batch_size, hidden_dim]
-        h = self.block2(torch.cat((h, x_emb), dim=1)) # [batch_size, hidden_dim + 1]
+        # Forward pass
+        h = self.block1(x_emb)
+        h = self.block2(torch.cat((h, x_emb), dim=1))
+        
+        # Extract density and features
         sigma = h[:, -1]
-        h = h[:, :-1] # [batch_size, hidden_dim]
-        c = self.rgb_head(torch.cat((h, d_emb), dim=1))
+        h_features = h[:, :-1]
         
-        return c, torch.relu(sigma)
+        # RGB prediction
+        c = self.rgb_head(torch.cat((h_features, d_emb), dim=1))
         
-    
+        # Apply activations with clamping
+        sigma = torch.relu(sigma)
+        sigma = torch.clamp(sigma, 0.0, 10.0)  # Prevent density explosion
+        
+        c = torch.clamp(c, 0.0, 1.0)  # Ensure RGB in valid range
+        
+        return c, sigma
+        
     def intersect(self, x, d):
         return self.forward(x, d)
+
     
 import torch.nn.functional as F
 

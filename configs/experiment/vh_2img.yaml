@@ -1,0 +1,15 @@
+# @package _global_
+
+name: vh_2img
+
+defaults:
+  - override /model: visual_hull
+
+data:
+  n_images: 2
+  image_transforms:
+    _target_: torchvision.transforms.Compose
+    transforms:
+      - _target_: torchvision.transforms.Resize
+        size: [32, 32]
+      - _target_: torchvision.transforms.ToTensor

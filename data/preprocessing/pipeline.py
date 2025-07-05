@@ -35,8 +35,8 @@ class Pipeline:
         self.raw_meshes = None
         self.processed_meshes = None
 
-    def _load_meshes(self):
-        files = os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir)
+    def _load_meshes(self, subdir: str = None):
+        files = os.path.join(os.getenv("DATA_DIR_PATH"), self.raw_mesh_dir, subdir or "")
         print(f"Loading meshes from {files}")
         self.raw_meshes = [f for f in os.listdir(files) if f.lower().endswith(".stl")]
         self.processed_meshes = [
@@ -51,12 +51,22 @@ class Pipeline:
         logger.info(f"Found {len(self.raw_meshes)} meshes in {files}")
 
     def run(self):
-        self._load_meshes()
-        self.mesh_repairer.process(self.raw_meshes)
-        self.image_generator.process(self.raw_meshes)
-        self.mesh_processor.process(self.raw_meshes)
-        self.voxel_generator.process(self.raw_meshes)
-        self.pointcloud_generator.process(self.raw_meshes)
-
+        for part in ["base", "augmented"]:
+            logger.info(f"Processing {part} meshes...")
+            self._load_meshes(part)
+            if not self.raw_meshes:
+                logger.warning(f"No raw meshes found in {part} directory.")
+                continue
+            
+            if part == "base":
+                self.mesh_repairer.process(self.raw_meshes)
+            
+            self.image_generator.process(self.raw_meshes, os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "interim") 
+                                         if part == "base" else os.path.join(os.getenv("DATA_DIR_PATH"), "raw", "augmented"))
+            self.mesh_processor.process(self.raw_meshes, os.path.join(os.getenv("DATA_DIR_PATH"), "processed", "interim") 
+                                         if part == "base" else os.path.join(os.getenv("DATA_DIR_PATH"), "raw", "augmented"))
+            self.voxel_generator.process(self.raw_meshes)
+            
+            # self.pointcloud_generator.process(self.raw_meshes) uncomment for Pixel2Mesh
 
         logger.info("Preprocessing completed!")
