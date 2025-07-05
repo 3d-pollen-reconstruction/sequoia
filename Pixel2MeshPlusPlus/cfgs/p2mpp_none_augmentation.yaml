@@ -27,4 +27,4 @@ test_epoch: 1200
 test_file_path: 'data/pollen/test_split.txt'
 test_data_path: 'data/pollen/test/'
 test_image_path: 'data/pollen/test'
-test_mesh_root: 'results/coarse_mvp2m_2_inputs_none_augmentation/predict/1200'
+test_mesh_root: 'results/coarse_mvp2m_2_inputs_none_augmentation/predict/1000'
