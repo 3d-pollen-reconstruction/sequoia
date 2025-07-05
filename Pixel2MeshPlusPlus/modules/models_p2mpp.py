@@ -104,10 +104,59 @@ class MeshNet(Model):
     def loadcnn(self, sess=None, ckpt_path=None, step=None):
         if not sess:
             raise AttributeError('TensorFlow session not provided.')
-        variables_to_restore = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='meshnet/cnn/')
-        var_list = {var.name: var for var in variables_to_restore}
-        saver = tf.train.Saver(var_list)
+        
+        # Try primary checkpoint path first
         save_path = os.path.join(ckpt_path, '{}.ckpt-{}'.format(self.name, step))
+        
+        # Check if checkpoint exists, if not try alternative names
+        if not tf.train.checkpoint_exists(save_path):
+            # Try meshnetmvp2m as fallback
+            alt_save_path = os.path.join(ckpt_path, 'meshnetmvp2m.ckpt-{}'.format(step))
+            if tf.train.checkpoint_exists(alt_save_path):
+                save_path = alt_save_path
+            else:
+                # List available checkpoints for debugging
+                print(f"CNN checkpoint not found at: {save_path}")
+                print(f"Also tried: {alt_save_path}")
+                if os.path.exists(ckpt_path):
+                    print(f"Available files in {ckpt_path}:")
+                    for f in os.listdir(ckpt_path):
+                        print(f"  {f}")
+                raise FileNotFoundError(f"CNN checkpoint not found: {save_path}")
+        
+        # Create flexible variable mapping that handles scope mismatches
+        checkpoint_reader = tf.train.NewCheckpointReader(save_path)
+        checkpoint_vars = checkpoint_reader.get_variable_to_shape_map()
+        
+        # Get current CNN variables
+        current_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='meshnet/cnn/')
+        
+        # Create flexible mapping
+        var_list = {}
+        for var in current_vars:
+            var_name = var.name
+            # Try different scope mappings
+            possible_names = [
+                var_name,  # exact match
+                var_name.replace('meshnet/', 'meshnetmvp2m/'),  # mvp2m scope
+                var_name.replace('meshnet/', ''),  # no scope prefix
+            ]
+            
+            found = False
+            for possible_name in possible_names:
+                if possible_name in checkpoint_vars:
+                    var_list[possible_name] = var
+                    print(f"Mapping: {possible_name} -> {var_name}")
+                    found = True
+                    break
+            
+            if not found:
+                print(f"Warning: Could not find checkpoint variable for {var_name}")
+        
+        if not var_list:
+            raise ValueError("No matching variables found between checkpoint and current model")
+        
+        saver = tf.train.Saver(var_list)
         saver.restore(sess, save_path)
         print('=> !!CNN restored from file: {}, epoch {}'.format(save_path, step))
 
