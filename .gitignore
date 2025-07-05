@@ -120,3 +120,4 @@ Pixel2MeshPlusPlus/results/*
 *.stl
 *train
 
+*.txt

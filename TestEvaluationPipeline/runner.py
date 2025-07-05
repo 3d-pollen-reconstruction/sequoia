@@ -60,7 +60,7 @@ COMPARE_DIR = os.path.join(os.path.dirname(CSV_SAVE_PATH), "test", "compare")
 os.makedirs(COMPARE_DIR, exist_ok=True)
 
 class MeshEvaluator:
-    def __init__(self, pred_root, gt_root, gt_root_aug, csv_save_path, plot_plots=True, plot_compare=False, debug=True, voxel_iou_on=False):
+    def __init__(self, pred_root, gt_root, gt_root_aug, csv_save_path, plot_plots=True, plot_compare=True, debug=True, voxel_iou_on=False):
         self.pred_root = pred_root
         self.gt_root = gt_root
         self.gt_root_aug = gt_root_aug
@@ -234,28 +234,46 @@ class MeshEvaluator:
         ]
 
     def plot_meshes(self, mesh_pred, mesh_gt, model_name, fname):
-        # Sample points from both meshes (convex hull)
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+
+        # Sample points from both meshes
         pts_pred, _ = trimesh.sample.sample_surface(mesh_pred, 5000)
         pts_gt, _ = trimesh.sample.sample_surface(mesh_gt, 5000)
 
-        fig = plt.figure(figsize=(8, 8))
-        ax = fig.add_subplot(111, projection='3d')
+        # Define views: (azimuth, elevation)
+        views = {
+            "front": (0, 0),
+            "back": (180, 0),
+            "left": (90, 0),
+            "right": (-90, 0),
+            "top": (0, 90),
+            "bottom": (0, -90),
+            "isometric": (45, 35)
+        }
 
-        # Plot predicted point cloud (aligned, deepskyblue)
-        ax.scatter(pts_pred[:, 0], pts_pred[:, 1], pts_pred[:, 2], c='deepskyblue', s=1, label='Prediction')
+        fig, axs = plt.subplots(1, len(views), figsize=(4 * len(views), 4), subplot_kw={'projection': '3d'})
 
-        # Plot GT point cloud (orange)
-        ax.scatter(pts_gt[:, 0], pts_gt[:, 1], pts_gt[:, 2], c='orange', s=1, label='Ground Truth')
+        if len(views) == 1:
+            axs = [axs]
 
-        ax.set_title('Prediction (blue) vs Ground Truth (orange) - Overlapped')
-        ax.set_axis_off()
-        ax.legend(loc='upper right')
+        for ax, (name, (azim, elev)) in zip(axs, views.items()):
+            ax.scatter(pts_gt[:, 0], pts_gt[:, 1], pts_gt[:, 2], c='orange', s=1, label='GT')
+            ax.scatter(pts_pred[:, 0], pts_pred[:, 1], pts_pred[:, 2], c='deepskyblue', s=1, label='Prediction')
+            ax.view_init(elev=elev, azim=azim)
+            ax.set_title(name)
+            ax.set_axis_off()
+
+        # Add legend only once (shared legend)
+        handles, labels = axs[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper center', ncol=2, fontsize=12)
 
         plt.tight_layout()
-        plot_path = os.path.join(PLOTS_DIR, f"{model_name}_{os.path.splitext(fname)[0]}_pc.png")
+        plot_path = os.path.join(PLOTS_DIR, f"{model_name}_{os.path.splitext(fname)[0]}_multi_view_pc.png")
         plt.savefig(plot_path, bbox_inches='tight', pad_inches=0.05)
         plt.close(fig)
         return plot_path
+
 
     def plot_meshes_compare(self, mesh_pred, mesh_gt, model_name, fname):
         # Plot the original (untouched) meshes as surfaces, not point clouds

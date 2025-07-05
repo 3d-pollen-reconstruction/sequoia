@@ -9,7 +9,7 @@ import os
 if __name__ == '__main__':
     xyz_path = sys.argv[1]
     obj_path = xyz_path.replace('.xyz', '.obj')
-    face_path = '../data/face3.obj'  # Adjust if needed
+    face_path = '../data/face2.obj'  # Adjust if needed
 
     xyzf = np.loadtxt(xyz_path)
     v = np.full((xyzf.shape[0], 1), 'v')
