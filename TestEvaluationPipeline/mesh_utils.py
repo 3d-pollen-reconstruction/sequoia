@@ -1,8 +1,8 @@
+import copy
 import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 import trimesh
 import open3d as o3d
-import numpy as np
 
 class MeshUtils:
     @staticmethod
@@ -20,6 +20,21 @@ class MeshUtils:
         if recall + precision == 0:
             return 0.0
         return 2 * recall * precision / (recall + precision)
+    
+    @staticmethod
+    def fscore_multi(d1, d2, thresholds):
+        """
+        Same F-score definition as `fscore`, but re-uses the
+        already-computed point–point distances for several thresholds.
+        Returns a list with the same order as `thresholds`.
+        """
+        out = []
+        for th in thresholds:
+            recall    = (d1 < th).mean()
+            precision = (d2 < th).mean()
+            f = 0.0 if (recall + precision) == 0 else 2 * recall * precision / (recall + precision)
+            out.append(f)
+        return out
 
     @staticmethod
     def chamfer_distance(pts_pred, pts_gt):
@@ -146,10 +161,6 @@ class MeshUtils:
             - mesh_aligned: transformed mesh_source
             - pts_src_aligned: transformed sampled source points
         """
-        import open3d as o3d
-        import numpy as np
-        import trimesh
-
         src = mesh_source.copy()
         tgt = mesh_target.copy()
 
@@ -184,9 +195,6 @@ class MeshUtils:
                 o3d.pipelines.registration.TransformationEstimationPointToPlane(),
                 o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=max_iterations)
             )
-
-            #print(f"[DEBUG][ICP] Fitness: {reg.fitness:.6f}, RMSE: {reg.inlier_rmse:.6f}")
-            #print(f"[DEBUG][ICP] Transformation:\n{reg.transformation}")
 
             if reg.fitness < 1e-4:
                 print(f"[WARNING] ICP failed: very low fitness. No alignment applied.")
