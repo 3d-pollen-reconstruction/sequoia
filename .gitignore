@@ -115,4 +115,6 @@ Pixel2MeshPlusPlus/results/*
 *.xyz.npy
 *.npy
 *.xyz
+*TestEvaluationPipeline/*.txt
 *.stl
+
