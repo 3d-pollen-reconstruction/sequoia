@@ -1,4 +1,4 @@
-<img src="gen_images/diagram_filled_medium_res.png" width="640" alt="Pipeline Overview" />
+<img width="1003" height="583" alt="bat_preprocessing" alt="Pipeline Overview" src="https://github.com/user-attachments/assets/032f7d71-304f-4faa-a22a-4e4da7d81605" />
 
 # Sequoia: A Unified Multi‑Model Framework for 3D Reconstruction of Pollen Morphologies
 
